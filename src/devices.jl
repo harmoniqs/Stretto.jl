@@ -93,6 +93,46 @@ function Piccolo.QuantumSystem(device::TransmonDevice, qubit_indices::AbstractVe
     Ē = (maximum(evals) + minimum(evals)) / 2
     H_drift .-= Ē * I(size(H_drift, 1))
 
-    # Use composite's drive_bounds directly (already includes all subsystems)
-    return QuantumSystem(H_drift, H_drives, composite.drive_bounds)
+    # Expand drive_bounds to match the number of drives.
+    # MultiTransmonSystem returns 2 bounds per-subsystem but H_drives includes
+    # all subsystem drives + coupling drives; pad/extend as needed.
+    n_drv = length(H_drives)
+    base_bounds = composite.drive_bounds
+    drive_bounds = if length(base_bounds) == n_drv
+        base_bounds
+    elseif length(base_bounds) == 1
+        fill(base_bounds[1], n_drv)
+    else
+        # Cycle the pattern to cover all drives (e.g., [(-b,b),(-b,b)] → repeated per qubit)
+        [base_bounds[mod1(i, length(base_bounds))] for i in 1:n_drv]
+    end
+
+    return QuantumSystem(H_drift, H_drives, drive_bounds)
+end
+
+# ============================================================================ #
+# Tests
+# ============================================================================ #
+
+@testitem "HeronR3 construction" begin
+    device = HeronR3()
+    @test device isa TransmonDevice
+    @test device.name == "ibm_heron_r3"
+    @test length(device.qubits) >= 4
+end
+
+@testitem "QuantumSystem from 2-qubit subset" begin
+    using Piccolo: QuantumSystem
+    device = HeronR3()
+    sys = QuantumSystem(device, [1, 2])
+    @test sys isa QuantumSystem
+    # 2 transmons × 3 levels = 9 dim
+    @test size(sys.H_drift, 1) == 9
+    # 2 drives per transmon = 4 drives
+    @test length(sys.H_drives) == 4
+end
+
+@testitem "subsystem_levels accessor" begin
+    device = HeronR3()
+    @test Stretto.subsystem_levels(device, [1, 2]) == [3, 3]
 end

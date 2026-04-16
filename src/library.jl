@@ -36,3 +36,19 @@ function qft_circuit(n::Int)
 
     return GateCircuit(ops, n)
 end
+
+# ============================================================================ #
+# Tests
+# ============================================================================ #
+
+@testitem "qft_circuit — 2-qubit" begin
+    using LinearAlgebra
+    c = qft_circuit(2)
+    @test c isa GateCircuit
+    @test c.n_qubits == 2
+    @test length(c.ops) > 0
+
+    # Unitarity check (smallest problem we test)
+    U = circuit_unitary(c)
+    @test U' * U ≈ I(4) atol=1e-10
+end

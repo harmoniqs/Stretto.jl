@@ -3,6 +3,7 @@ module Stretto
 using LinearAlgebra
 using Printf
 using TOML
+using TestItems
 
 using Piccolo
 using Piccolo:
