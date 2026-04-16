@@ -4,6 +4,7 @@ using LinearAlgebra
 using Printf
 using TOML
 
+using Piccolo
 using Piccolo:
     # Systems
     QuantumSystem, MultiTransmonSystem, CompositeQuantumSystem,

@@ -2,5 +2,5 @@ using Test
 using Stretto
 
 @testset "Stretto.jl" begin
-    @test true  # module loads
+    include("test_devices.jl")
 end
