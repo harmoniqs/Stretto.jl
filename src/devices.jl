@@ -28,14 +28,17 @@ end
     AbstractDevice
 
 Base type for all hardware device profiles. Subtypes carry the physical
-parameters needed to build a `QuantumSystem` for any qubit subset.
+parameters needed to build a Piccolo quantum system for any qubit subset.
 """
 abstract type AbstractDevice end
 
 """
     TransmonDevice <: AbstractDevice
 
-A superconducting transmon device with published specs.
+A superconducting transmon device profile. Holds the device-level
+information (qubit frequencies, couplings, published gate specs, T1/T2)
+that doesn't belong in a Piccolo `QuantumSystem` itself but is needed to
+build one for any subset of qubits.
 """
 struct TransmonDevice <: AbstractDevice
     name::String
@@ -52,62 +55,47 @@ subsystem_levels(device::TransmonDevice, qubit_indices) =
     [device.qubits[i].n_levels for i in qubit_indices]
 
 """
-    QuantumSystem(device::TransmonDevice, qubit_indices::AbstractVector{Int})
+    MultiTransmonSystem(device::TransmonDevice, qubit_indices::AbstractVector{Int}; kwargs...)
 
-Build a Piccolo QuantumSystem for a subset of qubits on a transmon device.
-Uses MultiTransmonSystem internally, then converts CompositeQuantumSystem
-to a flat QuantumSystem with energy shift for ODE stability.
+Build Piccolo's `MultiTransmonSystem` (a `CompositeQuantumSystem`) for a
+subset of qubits on a transmon device. Wraps Piccolo's native constructor
+with device-level plumbing: pulls frequencies/anharmonicities from the
+selected qubits, builds a symmetric coupling matrix from `device.edges`,
+and uses Piccolo's `subsystems` keyword for the qubit slice.
+
+The returned composite preserves subsystem structure (`subsystem_levels`,
+`subsystems`), so downstream code can use `EmbeddedOperator(U, composite)`
+without re-deriving the level layout.
 """
-function Piccolo.QuantumSystem(device::TransmonDevice, qubit_indices::AbstractVector{Int})
-    n = length(qubit_indices)
-    qs = [device.qubits[i] for i in qubit_indices]
+function Piccolo.MultiTransmonSystem(
+    device::TransmonDevice,
+    qubit_indices::AbstractVector{Int};
+    lab_frame::Bool = false,
+    kwargs...,
+)
+    N = length(device.qubits)
+    ωs = Float64[q.ω for q in device.qubits]
+    δs = Float64[q.δ for q in device.qubits]
 
-    ωs = Float64[q.ω for q in qs]
-    δs = Float64[q.δ for q in qs]
-
-    # Build coupling matrix for the subset
-    gs = zeros(Float64, n, n)
+    # Full N×N symmetric coupling matrix
+    gs = zeros(Float64, N, N)
     for edge in device.edges
-        # Map global indices to local indices
-        li = findfirst(==(edge.i), qubit_indices)
-        lj = findfirst(==(edge.j), qubit_indices)
-        if !isnothing(li) && !isnothing(lj)
-            gs[li, lj] = edge.g
-            gs[lj, li] = edge.g
-        end
+        gs[edge.i, edge.j] = edge.g
+        gs[edge.j, edge.i] = edge.g
     end
 
-    levels = qs[1].n_levels  # assume uniform
-    composite = MultiTransmonSystem(
+    # Assume uniform levels (enforced by typical device profiles)
+    levels = device.qubits[first(qubit_indices)].n_levels
+
+    return MultiTransmonSystem(
         ωs, δs, gs;
         drive_bounds = device.drive_max,
         levels_per_transmon = levels,
+        subsystems = collect(qubit_indices),
+        subsystem_drive_indices = collect(qubit_indices),
+        lab_frame = lab_frame,
+        kwargs...,
     )
-
-    # Convert CompositeQuantumSystem → QuantumSystem
-    H_drift = Matrix{ComplexF64}(composite.H_drift)
-    H_drives = [Matrix{ComplexF64}(H) for H in composite.H_drives]
-
-    # Energy shift for ODE stability
-    evals = real.(eigvals(Hermitian(H_drift)))
-    Ē = (maximum(evals) + minimum(evals)) / 2
-    H_drift .-= Ē * I(size(H_drift, 1))
-
-    # Expand drive_bounds to match the number of drives.
-    # MultiTransmonSystem returns 2 bounds per-subsystem but H_drives includes
-    # all subsystem drives + coupling drives; pad/extend as needed.
-    n_drv = length(H_drives)
-    base_bounds = composite.drive_bounds
-    drive_bounds = if length(base_bounds) == n_drv
-        base_bounds
-    elseif length(base_bounds) == 1
-        fill(base_bounds[1], n_drv)
-    else
-        # Cycle the pattern to cover all drives (e.g., [(-b,b),(-b,b)] → repeated per qubit)
-        [base_bounds[mod1(i, length(base_bounds))] for i in 1:n_drv]
-    end
-
-    return QuantumSystem(H_drift, H_drives, drive_bounds)
 end
 
 # ============================================================================ #
@@ -121,15 +109,20 @@ end
     @test length(device.qubits) >= 4
 end
 
-@testitem "QuantumSystem from 2-qubit subset" begin
-    using Piccolo: QuantumSystem
+@testitem "MultiTransmonSystem from 2-qubit subset" begin
+    using Piccolo: CompositeQuantumSystem, MultiTransmonSystem
     device = HeronR3()
-    sys = QuantumSystem(device, [1, 2])
-    @test sys isa QuantumSystem
+    sys = MultiTransmonSystem(device, [1, 2])
+    @test sys isa CompositeQuantumSystem
     # 2 transmons × 3 levels = 9 dim
-    @test size(sys.H_drift, 1) == 9
-    # 2 drives per transmon = 4 drives
-    @test length(sys.H_drives) == 4
+    @test sys.levels == 9
+    @test sys.subsystem_levels == [3, 3]
+    # 2 drives per transmon = 4 subsystem drives, 0 coupling drives
+    @test sys.n_drives == 4
+    # AbstractQuantumSystem interface is populated
+    @test sys.hermitian == true
+    @test sys.time_dependent == false
+    @test isempty(sys.global_params)
 end
 
 @testitem "subsystem_levels accessor" begin

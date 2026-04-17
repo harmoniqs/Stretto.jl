@@ -27,33 +27,35 @@ function compile_block(
     N_knots::Int = 21,
     Q::Float64 = 100.0,
     free_phase::Bool = true,
+    integrator = nothing,
 )
-    # 1. Build system
-    sys = Piccolo.QuantumSystem(device, qubit_indices)
+    # 1. Build a composite Piccolo system directly (no flattening)
+    sys = MultiTransmonSystem(device, qubit_indices)
     n = length(qubit_indices)
-    levels = subsystem_levels(device, qubit_indices)
 
-    # 2. Target unitary (qubit-level) → embedded in multi-level space
+    # 2. Target unitary → embedded using the composite's own subsystem_levels
     U_target = circuit_unitary(circuit)
-    subspaces = [collect(1:2) for _ in 1:n]
-    subspace = get_subspace_indices(subspaces, levels)
-    U_goal = EmbeddedOperator(U_target, subspace, levels)
+    U_goal = EmbeddedOperator(U_target, sys)
 
     # 3. Cold-start pulse (random, zero at boundaries)
-    n_drv = sys.n_drives
     times = collect(range(0.0, T_ns, length=N_knots))
-    u_init = 0.02 * randn(n_drv, N_knots)
+    u_init = 0.02 * randn(sys.n_drives, N_knots)
     u_init[:, 1] .= 0.0
     u_init[:, end] .= 0.0
-    du_init = zeros(n_drv, N_knots)
+    du_init = zeros(sys.n_drives, N_knots)
     pulse = CubicSplinePulse(u_init, du_init, times)
 
     # 4. Trajectory → Problem → Solve
     qtraj = UnitaryTrajectory(sys, pulse, U_goal)
+    # Default to Piccolissimo's SplineIntegrator — Piccolo's BilinearIntegrator
+    # explodes in memory for 4Q/81-dim compilation (evaluator construction OOMs
+    # on 62GB RAM). Caller can pass a different integrator.
+    integ = integrator === nothing ? SplineIntegrator(qtraj, N_knots) : integrator
     qcp = SplinePulseProblem(qtraj;
+        integrator = integ,
         Q = Q,
         free_phase = free_phase,
-        subsystem_levels = levels,
+        subsystem_levels = sys.subsystem_levels,
     )
     solve!(qcp; max_iter=max_iter)
 

@@ -1,15 +1,17 @@
-# QFT-4 on IBM Heron r3 — Stretto v0.1 milestone script.
+# QFT-4 on IBM Heron r3 — DEFERRED past v0.1.
 #
 # Compile QFT-4 as a single optimized pulse on a 4-qubit HeronR3 model
-# (3^4 = 81-dim Hilbert space, 8 drives) and print a CompilationReport.
+# (3^4 = 81-dim Hilbert space, 8 drives, 31 knots, 4 free phases). Uses
+# Piccolissimo's SplineIntegrator so evaluator construction stays in RAM
+# (~4GB observed, vs. 57GB OOM with Piccolo's BilinearIntegrator).
 #
-# Note (v0.1): with Piccolo's default BilinearIntegrator the 4-qubit compile
-# builds an ~1M-nonzero Jacobian and ~57GB RSS. On a 62GB workstation this
-# swap-thrashes before finishing one Ipopt iteration. A successful run
-# requires Piccolissimo's SplineIntegrator (smaller sensitivity evaluator),
-# which is a v0.2 dependency. Until then, this script exists as the
-# pipeline wiring proof — the 2Q compile path is covered by the
-# :integration-tagged @testitem in src/compile.jl.
+# Status: the pipeline wires up and evaluator construction succeeds on
+# this workstation, but even one Ipopt iteration on a 393k-constraint
+# problem is prohibitively slow for an interactive run. Keeping the
+# script as a reference target — revisit when we have:
+#   - a partitioning pass (compile per-block, not whole-circuit),
+#   - a warm-start catalog (start near a good pulse, not cold),
+#   - or a stronger solver (AL / GPU — see Altissimo).
 #
 # To run:
 #   OPENBLAS_NUM_THREADS=1 julia --project=. -t auto scripts/qft4_heronr3.jl

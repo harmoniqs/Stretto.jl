@@ -8,7 +8,7 @@ using TestItems
 using Piccolo
 using Piccolo:
     # Systems
-    QuantumSystem, MultiTransmonSystem, CompositeQuantumSystem,
+    AbstractQuantumSystem, QuantumSystem, MultiTransmonSystem, CompositeQuantumSystem,
     # Operators
     EmbeddedOperator, GATES, get_subspace_indices,
     # Pulses
@@ -19,6 +19,8 @@ using Piccolo:
     SplinePulseProblem, PiccoloOptions,
     # Solving
     solve!, fidelity, get_trajectory, extract_pulse
+
+using Piccolissimo: SplineIntegrator
 
 include("devices.jl")
 include("profiles.jl")
