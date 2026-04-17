@@ -41,6 +41,16 @@ const EXTRA_GATES = Dict{Symbol,Matrix{ComplexF64}}(
     :S  => ComplexF64[1 0; 0 im],
     :T  => ComplexF64[1 0; 0 exp(im*π/4)],
     :Rz => ComplexF64[1 0; 0 1],  # placeholder, overridden by Rz(θ)
+    # Doubly-controlled gates on qubits (1,2,3), qubit 1 MSB.
+    # CCX (Toffoli): flip qubit 3 iff qubits 1,2 both |1⟩ → swaps |110⟩↔|111⟩.
+    :CCX => begin
+        U = Matrix{ComplexF64}(I, 8, 8)
+        U[7, 7] = 0; U[8, 8] = 0
+        U[7, 8] = 1; U[8, 7] = 1
+        U
+    end,
+    # CCZ: phase-flip |111⟩.
+    :CCZ => Diagonal(ComplexF64[1, 1, 1, 1, 1, 1, 1, -1]) |> Matrix,
 )
 
 """Resolve a gate symbol to its unitary matrix."""

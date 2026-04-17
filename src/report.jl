@@ -31,12 +31,17 @@ function gate_level_baseline(circuit::GateCircuit, device::TransmonDevice)
             total_dur += 2 * sx.duration_ns
             total_fid *= (1.0 - sx.error_rate)^2
         elseif haskey(EXTRA_GATES, gate) || haskey(GATE_ALIASES, gate)
-            # Controlled-phase or alias — estimate as one CZ + 2 single-qubit
+            # Controlled-phase, Toffoli-class, or alias — decomposition estimate
             cz = get(device.native_gates, :CZ, GateSpec(60.0, 0.0033))
             sx = get(device.native_gates, :SX, GateSpec(25.0, 0.00035))
             if length(op.qubits) == 2
+                # ~1 CZ + 2 single-qubit
                 total_dur += cz.duration_ns + 2 * sx.duration_ns
                 total_fid *= (1.0 - cz.error_rate) * (1.0 - sx.error_rate)^2
+            elseif length(op.qubits) == 3
+                # Toffoli-class: standard decomposition ~6 CX + 10 single-qubit
+                total_dur += 6 * cz.duration_ns + 10 * sx.duration_ns
+                total_fid *= (1.0 - cz.error_rate)^6 * (1.0 - sx.error_rate)^10
             else
                 total_dur += sx.duration_ns
                 total_fid *= (1.0 - sx.error_rate)

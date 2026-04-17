@@ -37,6 +37,22 @@ function qft_circuit(n::Int)
     return GateCircuit(ops, n)
 end
 
+"""
+    toffoli_circuit()
+
+3-qubit Toffoli (CCX) gate: flip qubit 3 iff qubits 1 and 2 are both |1⟩.
+Represented as a single named gate — `compile_block` will synthesize a
+native pulse, not a decomposition.
+"""
+toffoli_circuit() = GateCircuit([GateOp(:CCX, (1, 2, 3))], 3)
+
+"""
+    ccz_circuit()
+
+3-qubit doubly-controlled Z gate: phase-flip |111⟩ only.
+"""
+ccz_circuit() = GateCircuit([GateOp(:CCZ, (1, 2, 3))], 3)
+
 # ============================================================================ #
 # Tests
 # ============================================================================ #
@@ -51,4 +67,30 @@ end
     # Unitarity check (smallest problem we test)
     U = circuit_unitary(c)
     @test U' * U ≈ I(4) atol=1e-10
+end
+
+@testitem "toffoli_circuit — 3-qubit unitary" begin
+    using LinearAlgebra
+    c = toffoli_circuit()
+    @test c isa GateCircuit
+    @test c.n_qubits == 3
+
+    U = circuit_unitary(c)
+    @test size(U) == (8, 8)
+    @test U' * U ≈ I(8) atol=1e-12
+    # Toffoli swaps |110⟩ (index 7) and |111⟩ (index 8), others identity
+    @test U[7, 8] ≈ 1 atol=1e-12
+    @test U[8, 7] ≈ 1 atol=1e-12
+    @test U[7, 7] ≈ 0 atol=1e-12
+end
+
+@testitem "ccz_circuit — 3-qubit unitary" begin
+    using LinearAlgebra
+    c = ccz_circuit()
+    U = circuit_unitary(c)
+    @test size(U) == (8, 8)
+    @test U' * U ≈ I(8) atol=1e-12
+    # CCZ phase-flips |111⟩ only
+    @test U[8, 8] ≈ -1 atol=1e-12
+    @test U[7, 7] ≈ 1 atol=1e-12
 end

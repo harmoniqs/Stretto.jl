@@ -103,3 +103,19 @@ end
     @test result.n_qubits == 2
     @test 0.0 ≤ result.fidelity ≤ 1.0
 end
+
+@testitem "compile_block — 3-qubit Toffoli (API smoke)" tags=[:integration] begin
+    using Piccolo: AbstractPulse, duration
+    device = HeronR3()
+    circuit = toffoli_circuit()
+
+    # 27-dim Hilbert space, 6 drives (2 per qubit). 5 iterations is enough
+    # to exercise the full pipeline without asserting convergence; the
+    # SplineIntegrator keeps evaluator memory reasonable.
+    result = compile_block(circuit, device, [1, 2, 3]; max_iter=5)
+
+    @test result.pulse isa AbstractPulse
+    @test duration(result.pulse) > 0.0
+    @test result.n_qubits == 3
+    @test 0.0 ≤ result.fidelity ≤ 1.0
+end
