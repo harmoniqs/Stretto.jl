@@ -1,0 +1,4 @@
+scripts/logs/
+*.jl.mem
+*.jl.cov
+.DS_Store
