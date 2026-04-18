@@ -72,8 +72,10 @@ Compile an entire circuit on a device. v0.1: no partitioning — compiles
 the whole circuit as a single block on qubits 1:n_qubits.
 """
 function compile(circuit::AbstractCircuit, device::AbstractDevice; max_iter::Int=500, kwargs...)
-    qubit_indices = collect(1:circuit.n_qubits)
-    block = compile_block(circuit, device, qubit_indices; max_iter, kwargs...)
+    blocks = default_partitioner(circuit, device)
+    @assert length(blocks) == 1 "Multi-block compilation requires a Stretto release > v0.2.1 that can glue block results into a joint report. v0.2.1 accepts only single-block partitioners."
+    spec = blocks[1]
+    block = compile_block(spec.subcircuit, device, spec.qubit_indices; max_iter, kwargs...)
     baseline = gate_level_baseline(circuit, device)
     return CompilationReport(circuit, device, block, baseline)
 end

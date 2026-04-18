@@ -93,6 +93,7 @@ set_default_initial_pulse!(f) = (_DEFAULT_INITIAL_PULSE[] = f)
 include("devices.jl")
 include("profiles.jl")
 include("circuits.jl")
+include("partitioning.jl")
 include("library.jl")
 include("compile.jl")
 include("report.jl")
@@ -105,5 +106,6 @@ export compile, compile_block
 export CompilationReport, gate_level_baseline
 export default_integrator, set_default_integrator!
 export default_initial_pulse, set_default_initial_pulse!
+export BlockSpec, default_partitioner, set_default_partitioner!
 
 end # module
