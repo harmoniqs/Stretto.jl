@@ -122,16 +122,25 @@ end
 
 @testitem "default_solver_strategy — substrate returns fidelity + pulse tuple" begin
     using Stretto
-    using Piccolo: AbstractPulse
-    # The substrate strategy just wraps solve! + extract_pulse + fidelity.
-    # We exercise it through compile_block on the smallest possible problem
-    # (1Q, 2-dim, 2 drives, max_iter=2) to confirm the tuple shape without
-    # asserting convergence.
+    using Piccolo: AbstractPulse, QuantumSystem, CubicSplinePulse, UnitaryTrajectory,
+                   SplinePulseProblem
 
-    device = HeronR3()
-    circuit = GateCircuit([GateOp(:H, (1,))], 1)
-    result = Stretto.compile_block(circuit, device, [1]; max_iter=2, N_knots=5)
+    # Exercise the strategy seam directly on the smallest possible problem
+    # (1Q, 2-dim, 1 drive, max_iter=2) to confirm the tuple shape without
+    # asserting convergence. Uses a flat QuantumSystem (not MultiTransmonSystem)
+    # so the test only stresses the strategy seam, independent of any
+    # composite-system EmbeddedOperator constructor that may be Piccolo-version
+    # dependent.
+    σz = ComplexF64[1 0; 0 -1]
+    σx = ComplexF64[0 1; 1 0]
+    sys = QuantumSystem(σz, [σx], [1.0])
+    times = collect(range(0.0, 10.0, length=5))
+    pulse = CubicSplinePulse(zeros(1, 5), zeros(1, 5), times)
+    qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
+    qcp = SplinePulseProblem(qtraj; integrator = Stretto.default_integrator(qtraj, 5))
 
-    @test result.pulse isa AbstractPulse
-    @test 0.0 ≤ result.fidelity ≤ 1.0
+    result_pulse, fid = Stretto.default_solver_strategy(qcp, qtraj; max_iter=2)
+
+    @test result_pulse isa AbstractPulse
+    @test 0.0 ≤ fid ≤ 1.0
 end
