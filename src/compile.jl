@@ -55,12 +55,9 @@ function compile_block(
         free_phase = free_phase,
         subsystem_levels = sys.subsystem_levels,
     )
-    solve!(qcp; max_iter=max_iter)
-
-    # 5. Extract result
-    traj = get_trajectory(qcp)
-    result_pulse = extract_pulse(qtraj, traj)
-    fid = fidelity(qcp)
+    # 5. Solve via the strategy seam (substrate: single cold start;
+    #    Strettissimo overrides with parallel multistart).
+    result_pulse, fid = default_solver_strategy(qcp, qtraj; max_iter=max_iter)
 
     return BlockResult(result_pulse, fid, n)
 end
@@ -121,4 +118,20 @@ end
     # SplinePulseProblem, not decorative).
     @test pulse.initial_value == zeros(n_drives)
     @test pulse.final_value == zeros(n_drives)
+end
+
+@testitem "default_solver_strategy — substrate returns fidelity + pulse tuple" begin
+    using Stretto
+    using Piccolo: AbstractPulse
+    # The substrate strategy just wraps solve! + extract_pulse + fidelity.
+    # We exercise it through compile_block on the smallest possible problem
+    # (1Q, 2-dim, 2 drives, max_iter=2) to confirm the tuple shape without
+    # asserting convergence.
+
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+    result = Stretto.compile_block(circuit, device, [1]; max_iter=2, N_knots=5)
+
+    @test result.pulse isa AbstractPulse
+    @test 0.0 ≤ result.fidelity ≤ 1.0
 end

@@ -90,6 +90,37 @@ Install `f` as the initial-pulse builder. `f` must have signature
 """
 set_default_initial_pulse!(f) = (_DEFAULT_INITIAL_PULSE[] = f)
 
+"""
+    default_solver_strategy(problem, qtraj; max_iter)
+
+Execute the solve and return `(pulse, fidelity)`. Substrate: one `solve!` call
+with the given `max_iter`, then `extract_pulse` + `fidelity`. This is the single
+cold-start path.
+
+Strettissimo overrides this with a parallel-multistart strategy that launches K
+cold starts, solves each, and returns the best-fidelity pair.
+"""
+default_solver_strategy(problem, qtraj; max_iter) =
+    _DEFAULT_SOLVER_STRATEGY[](problem, qtraj; max_iter)
+
+function _substrate_default_solver_strategy(problem, qtraj; max_iter)
+    solve!(problem; max_iter=max_iter)
+    traj = get_trajectory(problem)
+    pulse = extract_pulse(qtraj, traj)
+    fid = fidelity(problem)
+    return (pulse, fid)
+end
+
+const _DEFAULT_SOLVER_STRATEGY = Ref{Any}(_substrate_default_solver_strategy)
+
+"""
+    set_default_solver_strategy!(f)
+
+Install `f` as the solver strategy. `f` must have signature
+`(problem, qtraj; max_iter) -> (pulse, fidelity)`.
+"""
+set_default_solver_strategy!(f) = (_DEFAULT_SOLVER_STRATEGY[] = f)
+
 include("devices.jl")
 include("profiles.jl")
 include("circuits.jl")
@@ -107,5 +138,6 @@ export CompilationReport, gate_level_baseline
 export default_integrator, set_default_integrator!
 export default_initial_pulse, set_default_initial_pulse!
 export BlockSpec, default_partitioner, set_default_partitioner!
+export default_solver_strategy, set_default_solver_strategy!
 
 end # module
