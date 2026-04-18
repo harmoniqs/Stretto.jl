@@ -37,13 +37,10 @@ function compile_block(
     U_target = circuit_unitary(circuit)
     U_goal = EmbeddedOperator(U_target, sys)
 
-    # 3. Cold-start pulse (random, zero at boundaries)
+    # 3. Initial pulse via the seam (substrate: random Gaussian cold start;
+    #    Strettissimo overrides with catalog warm-starts).
     times = collect(range(0.0, T_ns, length=N_knots))
-    u_init = 0.02 * randn(sys.n_drives, N_knots)
-    u_init[:, 1] .= 0.0
-    u_init[:, end] .= 0.0
-    du_init = zeros(sys.n_drives, N_knots)
-    pulse = CubicSplinePulse(u_init, du_init, times)
+    pulse = default_initial_pulse(circuit, device, times, sys.n_drives)
 
     # 4. Trajectory → Problem → Solve
     qtraj = UnitaryTrajectory(sys, pulse, U_goal)
@@ -103,3 +100,23 @@ end
     @test integ isa BilinearIntegrator
 end
 
+@testitem "default_initial_pulse — substrate returns zero-boundary CubicSplinePulse" begin
+    using Stretto
+    using Piccolo: CubicSplinePulse, duration
+
+    times = collect(range(0.0, 10.0, length=5))
+    n_drives = 2
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+    device = HeronR3()
+
+    pulse = Stretto.default_initial_pulse(circuit, device, times, n_drives)
+
+    @test pulse isa CubicSplinePulse
+    @test duration(pulse) ≈ 10.0
+    @test pulse.n_drives == n_drives
+    # Substrate contract: zero-clamped at both boundaries via explicit
+    # initial_value / final_value (these are load-bearing for
+    # SplinePulseProblem, not decorative).
+    @test pulse.initial_value == zeros(n_drives)
+    @test pulse.final_value == zeros(n_drives)
+end

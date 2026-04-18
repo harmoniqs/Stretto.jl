@@ -53,6 +53,43 @@ plug in custom integrators without editing Stretto source.
 """
 set_default_integrator!(builder) = (_DEFAULT_INTEGRATOR[] = builder; builder)
 
+"""
+    default_initial_pulse(circuit, device, times, n_drives)
+
+Return the initial `CubicSplinePulse` that seeds optimization. Substrate: a random
+Gaussian cold start (std = 0.02), zero-clamped at the first and last knots with
+zero derivatives.
+
+Strettissimo overrides this with a catalog-retrieval warm-start keyed on the
+(circuit fingerprint, device profile) pair, falling back to the substrate on
+catalog miss.
+"""
+default_initial_pulse(circuit, device, times, n_drives) =
+    _DEFAULT_INITIAL_PULSE[](circuit, device, times, n_drives)
+
+function _substrate_default_initial_pulse(circuit, device, times, n_drives)
+    N = length(times)
+    u_init = 0.02 * randn(n_drives, N)
+    u_init[:, 1] .= 0.0
+    u_init[:, end] .= 0.0
+    du_init = zeros(n_drives, N)
+    return CubicSplinePulse(
+        u_init, du_init, times;
+        initial_value = zeros(n_drives),
+        final_value = zeros(n_drives),
+    )
+end
+
+const _DEFAULT_INITIAL_PULSE = Ref{Any}(_substrate_default_initial_pulse)
+
+"""
+    set_default_initial_pulse!(f)
+
+Install `f` as the initial-pulse builder. `f` must have signature
+`(circuit, device, times, n_drives) -> CubicSplinePulse`.
+"""
+set_default_initial_pulse!(f) = (_DEFAULT_INITIAL_PULSE[] = f)
+
 include("devices.jl")
 include("profiles.jl")
 include("circuits.jl")
@@ -67,5 +104,6 @@ export qft_circuit, toffoli_circuit, ccz_circuit
 export compile, compile_block
 export CompilationReport, gate_level_baseline
 export default_integrator, set_default_integrator!
+export default_initial_pulse, set_default_initial_pulse!
 
 end # module
