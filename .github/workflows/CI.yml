@@ -1,48 +1,90 @@
 name: CI
 on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   push:
     branches:
       - main
     tags: ['*']
-  pull_request:
 concurrency:
-  # Skip intermediate builds: always.
-  # Cancel intermediate builds: only if it is a pull request build.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 jobs:
-  test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
-    runs-on: ${{ matrix.os }}
+  # Probe job: expose whether the HARMONIQS_CI_TOKEN secret is configured, so
+  # dependent jobs can gate themselves on a job output (which passes the linter)
+  # instead of a job-level `if` that reads `secrets.*` directly.
+  detect-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has_token: ${{ steps.probe.outputs.has_token }}
+    steps:
+      - id: probe
+        env:
+          HARMONIQS_CI_TOKEN: ${{ secrets.HARMONIQS_CI_TOKEN }}
+        run: |
+          if [ -n "$HARMONIQS_CI_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  test-piccolo:
+    name: Julia ${{ matrix.version }} (public deps only)
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - '1.12'
-          - '1.10'
-          - '1.11'
-        os:
-          - ubuntu-latest
-        arch:
-          - x64
+        version: ['1.10', '1.11', '1.12']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
-      - name: Configure access to private Harmoniqs deps (e.g. Piccolissimo)
-        env:
-          HARMONIQS_CI_TOKEN: ${{ secrets.HARMONIQS_CI_TOKEN }}
-        if: env.HARMONIQS_CI_TOKEN != ''
-        run: |
-          git config --global url."https://x-access-token:${HARMONIQS_CI_TOKEN}@github.com/".insteadOf "https://github.com/"
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  test-piccolissimo:
+    name: Julia ${{ matrix.version }} (with Piccolissimo)
+    # Only runs when the machine-user PAT is wired up; otherwise the job is
+    # skipped cleanly instead of failing on a missing private repo clone.
+    needs: detect-secrets
+    if: needs.detect-secrets.outputs.has_token == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Piccolissimo declares julia = "1.12", so this job pins to 1.12.
+        # The test-piccolo matrix above exercises 1.10/1.11/1.12 for the
+        # public-only surface.
+        version: ['1.12']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+      - name: Configure private-repo access
+        env:
+          HARMONIQS_CI_TOKEN: ${{ secrets.HARMONIQS_CI_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${HARMONIQS_CI_TOKEN}@github.com/".insteadOf "https://github.com/"
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Add Piccolissimo to activate extension
+        run: |
+          julia --project=. -e '
+              using Pkg
+              Pkg.add(url="https://github.com/harmoniqs/Piccolissimo.jl")
+          '
+      - name: Run full test suite (including :piccolissimo + :integration)
+        env:
+          STRETTO_FULL_TESTS: "1"
+        run: julia --project=. --color=yes test/runtests.jl
