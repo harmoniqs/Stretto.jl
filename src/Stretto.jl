@@ -27,13 +27,32 @@ using Piccolo:
 
 Return the integrator used by `compile_block`. Default: Piccolo's `BilinearIntegrator`,
 adequate for 1-2 qubit problems. When `Piccolissimo` is loaded, the
-`StrettoPiccolissimoExt` extension overrides this to return `SplineIntegrator`, which
-scales to 3+ qubit compilation without exhausting memory during evaluator construction.
+`StrettoPiccolissimoExt` extension installs a `SplineIntegrator` builder via
+[`set_default_integrator!`](@ref), which scales to 3+ qubit compilation without
+exhausting memory during evaluator construction.
 
-Users who want a different integrator can either load Piccolissimo or override this
-function directly.
+Users who want a different integrator can either load Piccolissimo or call
+`set_default_integrator!` with a custom builder `(qtraj, N) -> integrator`.
 """
-default_integrator(qtraj, N) = BilinearIntegrator(qtraj, N)
+default_integrator(qtraj, N) = _DEFAULT_INTEGRATOR[](qtraj, N)
+
+# Mutable default builder — swapped by the StrettoPiccolissimoExt extension at
+# load time. Julia's package-extension system does not permit two modules to
+# define methods with identical signatures (all argument types belong to the
+# parent packages), so we indirect through a Ref-held builder function.
+const _DEFAULT_INTEGRATOR = Ref{Any}(
+    (qtraj, N) -> BilinearIntegrator(qtraj, N)
+)
+
+"""
+    set_default_integrator!(builder)
+
+Install a new builder function for [`default_integrator`](@ref). `builder` must
+accept `(qtraj, N)` and return an `AbstractIntegrator`. Intended primarily for
+use by the `StrettoPiccolissimoExt` extension, but callers can also use it to
+plug in custom integrators without editing Stretto source.
+"""
+set_default_integrator!(builder) = (_DEFAULT_INTEGRATOR[] = builder; builder)
 
 include("devices.jl")
 include("profiles.jl")
@@ -48,6 +67,6 @@ export AbstractCircuit, GateOp, GateCircuit, circuit_unitary
 export qft_circuit, toffoli_circuit, ccz_circuit
 export compile, compile_block
 export CompilationReport, gate_level_baseline
-export default_integrator
+export default_integrator, set_default_integrator!
 
 end # module
