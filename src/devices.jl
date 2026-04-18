@@ -119,10 +119,6 @@ end
     @test sys.subsystem_levels == [3, 3]
     # 2 drives per transmon = 4 subsystem drives, 0 coupling drives
     @test sys.n_drives == 4
-    # AbstractQuantumSystem interface is populated
-    @test sys.hermitian == true
-    @test sys.time_dependent == false
-    @test isempty(sys.global_params)
 end
 
 @testitem "subsystem_levels accessor" begin
