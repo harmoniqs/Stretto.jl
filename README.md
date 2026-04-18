@@ -56,11 +56,17 @@ where $V_\varphi$ are per-qubit virtual-Z phases (free-phase), $U(T;\,u)$ is the
 
 ## Installation
 
-Stretto.jl is not yet registered. Install with:
-
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/harmoniqs/Stretto.jl")
+Pkg.add("Stretto")
+```
+
+For problems larger than ~2 qubits, also install
+[Piccolissimo.jl](https://github.com/harmoniqs/Piccolissimo.jl) (private, request access):
+
+```julia
+Pkg.add(url="https://github.com/harmoniqs/Piccolissimo.jl")
+using Piccolissimo   # enables SplineIntegrator via the StrettoPiccolissimoExt extension
 ```
 
 ## Quick Example
@@ -87,41 +93,39 @@ println(report)
 # Fidelity           ...%            ...%           ...× error
 ```
 
-## Key Features (v0.1)
+## Key Features (v0.2)
 
 - **Device profiles.** `HeronR3` (IBM Heron r3 model) plus the infrastructure to add others (`TransmonDevice` is a thin wrapper around Piccolo's `MultiTransmonSystem`).
 - **Circuit IR.** `GateCircuit`, `GateOp`, `circuit_unitary` — plus built-in `qft_circuit(n)`, `toffoli_circuit()`, `ccz_circuit()`.
 - **Single-pulse compilation.** `compile_block` wires a circuit + device subset → Piccolo `UnitaryTrajectory` → `SplinePulseProblem` → optimized pulse. `compile` does the whole circuit.
 - **Gate-vs-pulse benchmarks.** `CompilationReport` compares the published gate-level baseline to the pulse-level result.
-- **Integrator-agnostic.** Uses [Piccolissimo.jl](https://github.com/harmoniqs/Piccolissimo.jl)'s `SplineIntegrator` by default (fast on multi-qubit problems); integrator is a `kwarg`.
+- **Extensible integrator.** Default: Piccolo's `BilinearIntegrator` (adequate for 1-2 qubit problems). Loading [Piccolissimo.jl](https://github.com/harmoniqs/Piccolissimo.jl) activates the `StrettoPiccolissimoExt` extension, swapping in `SplineIntegrator` for multi-qubit compilation. Callers can also override `Stretto.default_integrator` directly or pass an `integrator=` kwarg.
 
-## Not yet in v0.1 (future work)
+## Not yet in v0.2 (future work)
 
 | Feature | Target |
 |---|---|
-| QASM import | v0.2 |
-| Catalog warm-starts | v0.2 |
+| QASM import | v0.3 |
+| Catalog warm-starts | v0.3 |
 | Circuit partitioning | v0.3 |
-| QEC kernel integration | v0.3 |
+| QEC kernel integration | v0.4 |
 | Framework adapters (Qiskit/Cirq via PythonCall) | v0.4 |
 
 ## Contributing
 
 ### Running tests
 
-Default suite (fast, no Piccolo solve):
+Default suite (fast, public-deps only — no Piccolissimo required):
 
 ```bash
 julia --project=. test/runtests.jl
 ```
 
-Integration suite (includes 2Q and 3Q compile smoke tests):
+Full suite (includes 2Q and 3Q `compile_block` smoke tests — requires Piccolissimo):
 
 ```bash
-julia --project=. -e '
-  using TestItemRunner
-  TestItemRunner.run_tests("."; filter = ti -> :integration in ti.tags)
-'
+julia --project=. -e 'using Pkg; Pkg.develop(path="../Piccolissimo.jl")'
+STRETTO_FULL_TESTS=1 julia --project=. test/runtests.jl
 ```
 
 ### Building Documentation
