@@ -61,13 +61,10 @@ using Pkg
 Pkg.add("Stretto")
 ```
 
-For problems larger than ~2 qubits, also install
-[Piccolissimo.jl](https://github.com/harmoniqs/Piccolissimo.jl) (private, request access):
-
-```julia
-Pkg.add(url="https://github.com/harmoniqs/Piccolissimo.jl")
-using Piccolissimo   # enables SplineIntegrator via the StrettoPiccolissimoExt extension
-```
+For problems larger than ~2 qubits, the default `BilinearIntegrator` can exhaust
+memory during evaluator construction. Harmoniqs collaborators with access to the
+private `Piccolissimo.jl` can swap in a scalable spline-based integrator by
+setting `Stretto.default_integrator` directly (see "Key Features" below).
 
 ## Quick Example
 
@@ -99,7 +96,7 @@ println(report)
 - **Circuit IR.** `GateCircuit`, `GateOp`, `circuit_unitary` — plus built-in `qft_circuit(n)`, `toffoli_circuit()`, `ccz_circuit()`.
 - **Single-pulse compilation.** `compile_block` wires a circuit + device subset → Piccolo `UnitaryTrajectory` → `SplinePulseProblem` → optimized pulse. `compile` does the whole circuit.
 - **Gate-vs-pulse benchmarks.** `CompilationReport` compares the published gate-level baseline to the pulse-level result.
-- **Extensible integrator.** Default: Piccolo's `BilinearIntegrator` (adequate for 1-2 qubit problems). Loading [Piccolissimo.jl](https://github.com/harmoniqs/Piccolissimo.jl) activates the `StrettoPiccolissimoExt` extension, swapping in `SplineIntegrator` for multi-qubit compilation. Callers can also override `Stretto.default_integrator` directly or pass an `integrator=` kwarg.
+- **Extensible integrator.** Default: Piccolo's `BilinearIntegrator` (adequate for 1-2 qubit problems). The call site is a single `Stretto.default_integrator(qtraj, N)` seam that callers can override — e.g., to swap in a spline-based integrator for multi-qubit compilation, or pass `integrator=` to `compile_block` directly.
 
 ## Not yet in v0.2 (future work)
 
@@ -115,13 +112,13 @@ println(report)
 
 ### Running tests
 
-Default suite (fast, public-deps only — no Piccolissimo required):
+Default suite (fast, public-deps only):
 
 ```bash
 julia --project=. test/runtests.jl
 ```
 
-Full suite (includes 2Q and 3Q `compile_block` smoke tests — requires Piccolissimo):
+Full suite (includes 2Q and 3Q `compile_block` smoke tests; requires a scalable integrator — Harmoniqs collaborators only):
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.develop(path="../Piccolissimo.jl")'
