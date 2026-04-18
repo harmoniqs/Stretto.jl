@@ -48,8 +48,8 @@ function compile_block(
     # 4. Trajectory → Problem → Solve
     qtraj = UnitaryTrajectory(sys, pulse, U_goal)
     # Default integrator seam: Piccolo's BilinearIntegrator is adequate for
-    # 1-2 qubit problems; loading Piccolissimo activates the
-    # StrettoPiccolissimoExt extension, which swaps in SplineIntegrator for
+    # 1-2 qubit problems. The private Strettissimo package overrides this via
+    # `set_default_integrator!` to install Piccolissimo's SplineIntegrator for
     # multi-qubit compilation. Caller can also pass `integrator=` directly.
     integ = integrator === nothing ? default_integrator(qtraj, N_knots) : integrator
     qcp = SplinePulseProblem(qtraj;
@@ -84,16 +84,14 @@ end
 # ============================================================================ #
 # Tests
 # ============================================================================ #
-# Stretto v0.1 has no Piccolissimo dependency, so compile tests use Piccolo's
-# default BilinearIntegrator — slow on anything bigger than 2 qubits.
-# Integration tests are tagged `:integration` so they are opt-in, not part of
-# the default `@run_package_tests` filter.
+# Stretto's default test suite uses Piccolo's BilinearIntegrator. Multi-qubit
+# integration tests live in the private Strettissimo package, which overrides
+# `default_integrator` with Piccolissimo's SplineIntegrator.
 
-@testitem "default_integrator dispatches correctly" begin
+@testitem "default_integrator — substrate returns BilinearIntegrator" begin
     using Stretto
     using Piccolo: BilinearIntegrator, UnitaryTrajectory, CubicSplinePulse, QuantumSystem
 
-    # Minimal 1Q system (QuantumSystem requires symmetric amplitude bounds)
     σz = ComplexF64[1 0; 0 -1]
     σx = ComplexF64[0 1; 1 0]
     sys = QuantumSystem(σz, [σx], [1.0])
@@ -102,51 +100,6 @@ end
     qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
 
     integ = Stretto.default_integrator(qtraj, 5)
-
-    # If the StrettoPiccolissimoExt extension is loaded, we get SplineIntegrator;
-    # otherwise BilinearIntegrator. Both are valid — verify one of them.
-    piccolissimo_loaded = Base.get_extension(Stretto, :StrettoPiccolissimoExt) !== nothing
-    if piccolissimo_loaded
-        @test !(integ isa BilinearIntegrator)
-    else
-        @test integ isa BilinearIntegrator
-    end
+    @test integ isa BilinearIntegrator
 end
 
-@testitem "compile_block — 2-qubit H→CZ (API smoke)" tags=[:piccolissimo, :integration] begin
-    # `using Piccolissimo` triggers the StrettoPiccolissimoExt extension,
-    # swapping the default integrator for Piccolissimo's SplineIntegrator —
-    # required for the 3Q test below (BilinearIntegrator OOMs at 27 dims) and
-    # consistent behavior for the 2Q test.
-    using Piccolissimo
-    using Piccolo: AbstractPulse, duration
-    device = HeronR3()
-    circuit = GateCircuit(
-        [GateOp(:H, (1,)), GateOp(:CZ, (1, 2))],
-        2
-    )
-
-    result = compile_block(circuit, device, [1, 2]; max_iter=2)
-
-    @test result.pulse isa AbstractPulse
-    @test duration(result.pulse) > 0.0
-    @test result.n_qubits == 2
-    @test 0.0 ≤ result.fidelity ≤ 1.0
-end
-
-@testitem "compile_block — 3-qubit Toffoli (API smoke)" tags=[:piccolissimo, :integration] begin
-    using Piccolissimo
-    using Piccolo: AbstractPulse, duration
-    device = HeronR3()
-    circuit = toffoli_circuit()
-
-    # 27-dim Hilbert space, 6 drives (2 per qubit). 5 iterations is enough
-    # to exercise the full pipeline without asserting convergence; the
-    # SplineIntegrator keeps evaluator memory reasonable.
-    result = compile_block(circuit, device, [1, 2, 3]; max_iter=5)
-
-    @test result.pulse isa AbstractPulse
-    @test duration(result.pulse) > 0.0
-    @test result.n_qubits == 3
-    @test 0.0 ≤ result.fidelity ≤ 1.0
-end

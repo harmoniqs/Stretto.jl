@@ -26,20 +26,19 @@ using Piccolo:
     default_integrator(qtraj, N)
 
 Return the integrator used by `compile_block`. Default: Piccolo's `BilinearIntegrator`,
-adequate for 1-2 qubit problems. When `Piccolissimo` is loaded, the
-`StrettoPiccolissimoExt` extension installs a `SplineIntegrator` builder via
+adequate for 1-2 qubit problems. When the private `Strettissimo` package is
+loaded, its `__init__` installs a `SplineIntegrator` builder via
 [`set_default_integrator!`](@ref), which scales to 3+ qubit compilation without
 exhausting memory during evaluator construction.
 
-Users who want a different integrator can either load Piccolissimo or call
+Users who want a different integrator can either load Strettissimo or call
 `set_default_integrator!` with a custom builder `(qtraj, N) -> integrator`.
 """
 default_integrator(qtraj, N) = _DEFAULT_INTEGRATOR[](qtraj, N)
 
-# Mutable default builder — swapped by the StrettoPiccolissimoExt extension at
-# load time. Julia's package-extension system does not permit two modules to
-# define methods with identical signatures (all argument types belong to the
-# parent packages), so we indirect through a Ref-held builder function.
+# Mutable default builder — swapped by Strettissimo's `__init__` at load time.
+# We indirect through a Ref-held builder function so downstream packages can
+# install overrides without redefining methods on types they don't own.
 const _DEFAULT_INTEGRATOR = Ref{Any}(
     (qtraj, N) -> BilinearIntegrator(qtraj, N)
 )
@@ -49,7 +48,7 @@ const _DEFAULT_INTEGRATOR = Ref{Any}(
 
 Install a new builder function for [`default_integrator`](@ref). `builder` must
 accept `(qtraj, N)` and return an `AbstractIntegrator`. Intended primarily for
-use by the `StrettoPiccolissimoExt` extension, but callers can also use it to
+use by the private `Strettissimo` package, but callers can also use it to
 plug in custom integrators without editing Stretto source.
 """
 set_default_integrator!(builder) = (_DEFAULT_INTEGRATOR[] = builder; builder)
