@@ -89,7 +89,8 @@ end
 # Integration tests are tagged `:integration` so they are opt-in, not part of
 # the default `@run_package_tests` filter.
 
-@testitem "default_integrator falls back to BilinearIntegrator without Piccolissimo" begin
+@testitem "default_integrator dispatches correctly" begin
+    using Stretto
     using Piccolo: BilinearIntegrator, UnitaryTrajectory, CubicSplinePulse, QuantumSystem
 
     # Minimal 1Q system (QuantumSystem requires symmetric amplitude bounds)
@@ -101,10 +102,23 @@ end
     qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
 
     integ = Stretto.default_integrator(qtraj, 5)
-    @test integ isa BilinearIntegrator
+
+    # If the StrettoPiccolissimoExt extension is loaded, we get SplineIntegrator;
+    # otherwise BilinearIntegrator. Both are valid — verify one of them.
+    piccolissimo_loaded = Base.get_extension(Stretto, :StrettoPiccolissimoExt) !== nothing
+    if piccolissimo_loaded
+        @test !(integ isa BilinearIntegrator)
+    else
+        @test integ isa BilinearIntegrator
+    end
 end
 
-@testitem "compile_block — 2-qubit H→CZ (API smoke)" tags=[:integration] begin
+@testitem "compile_block — 2-qubit H→CZ (API smoke)" tags=[:piccolissimo, :integration] begin
+    # `using Piccolissimo` triggers the StrettoPiccolissimoExt extension,
+    # swapping the default integrator for Piccolissimo's SplineIntegrator —
+    # required for the 3Q test below (BilinearIntegrator OOMs at 27 dims) and
+    # consistent behavior for the 2Q test.
+    using Piccolissimo
     using Piccolo: AbstractPulse, duration
     device = HeronR3()
     circuit = GateCircuit(
@@ -120,7 +134,8 @@ end
     @test 0.0 ≤ result.fidelity ≤ 1.0
 end
 
-@testitem "compile_block — 3-qubit Toffoli (API smoke)" tags=[:integration] begin
+@testitem "compile_block — 3-qubit Toffoli (API smoke)" tags=[:piccolissimo, :integration] begin
+    using Piccolissimo
     using Piccolo: AbstractPulse, duration
     device = HeronR3()
     circuit = toffoli_circuit()
