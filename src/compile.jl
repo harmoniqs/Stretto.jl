@@ -47,10 +47,11 @@ function compile_block(
 
     # 4. Trajectory → Problem → Solve
     qtraj = UnitaryTrajectory(sys, pulse, U_goal)
-    # Default to Piccolissimo's SplineIntegrator — Piccolo's BilinearIntegrator
-    # explodes in memory for 4Q/81-dim compilation (evaluator construction OOMs
-    # on 62GB RAM). Caller can pass a different integrator.
-    integ = integrator === nothing ? SplineIntegrator(qtraj, N_knots) : integrator
+    # Default integrator seam: Piccolo's BilinearIntegrator is adequate for
+    # 1-2 qubit problems; loading Piccolissimo activates the
+    # StrettoPiccolissimoExt extension, which swaps in SplineIntegrator for
+    # multi-qubit compilation. Caller can also pass `integrator=` directly.
+    integ = integrator === nothing ? default_integrator(qtraj, N_knots) : integrator
     qcp = SplinePulseProblem(qtraj;
         integrator = integ,
         Q = Q,
@@ -87,6 +88,21 @@ end
 # default BilinearIntegrator — slow on anything bigger than 2 qubits.
 # Integration tests are tagged `:integration` so they are opt-in, not part of
 # the default `@run_package_tests` filter.
+
+@testitem "default_integrator falls back to BilinearIntegrator without Piccolissimo" begin
+    using Piccolo: BilinearIntegrator, UnitaryTrajectory, CubicSplinePulse, QuantumSystem
+
+    # Minimal 1Q system (QuantumSystem requires symmetric amplitude bounds)
+    σz = ComplexF64[1 0; 0 -1]
+    σx = ComplexF64[0 1; 1 0]
+    sys = QuantumSystem(σz, [σx], [1.0])
+    times = collect(range(0.0, 10.0, length=5))
+    pulse = CubicSplinePulse(zeros(1, 5), zeros(1, 5), times)
+    qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
+
+    integ = Stretto.default_integrator(qtraj, 5)
+    @test integ isa BilinearIntegrator
+end
 
 @testitem "compile_block — 2-qubit H→CZ (API smoke)" tags=[:integration] begin
     using Piccolo: AbstractPulse, duration
