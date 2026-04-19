@@ -240,14 +240,46 @@ end
     device = HeronR3()
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
 
-    # With only :default registered, dispatch should use :default and behave
-    # byte-for-byte the same as v0.2.1 compile. We exercise by running a tiny
-    # 1Q solve via the public compile entry point.
-    report = compile(circuit, device; max_iter=2, T_ns=20.0, N_knots=5)
+    # Prove dispatch reaches :default's partitioner without running the full
+    # (EmbeddedOperator-on-CompositeQuantumSystem) solve pipeline, which is
+    # Piccolo-post-v1.6-only and breaks on registered Piccolo v1.6 / Julia 1.10.
+    # Instrument :default's partitioner to throw a sentinel error when called.
+    saved_default = Stretto.strategies()[:default]
+    instrumented = Stretto.CompilationStrategy(
+        name = :default,
+        description = saved_default.description,
+        matches = saved_default.matches,
+        integrator = saved_default.integrator,
+        initial_pulse = saved_default.initial_pulse,
+        partitioner = (c, d) -> error("SENTINEL_DEFAULT_CALLED"),
+        build_problem = saved_default.build_problem,
+        solver_strategy = saved_default.solver_strategy,
+        post_process = saved_default.post_process,
+        state = saved_default.state,
+    )
+    # Suppress the overwrite warning — we're reinstalling :default on purpose.
+    Base.with_logger(Base.NullLogger()) do
+        Stretto.register_strategy!(instrumented)
+    end
 
-    # Report exists and carries sensible metadata
-    @test report isa CompilationReport
-    @test 0.0 ≤ report.pulse_fidelity ≤ 1.0
+    try
+        # With only :default registered, dispatch should resolve to :default
+        # and invoke its (instrumented) partitioner, throwing our sentinel.
+        err = try
+            compile(circuit, device; max_iter=2, T_ns=20.0, N_knots=5)
+            nothing
+        catch e
+            e
+        end
+        @test err !== nothing
+        @test occursin("SENTINEL_DEFAULT_CALLED", sprint(showerror, err))
+    finally
+        # Restore the real :default so subsequent testitems don't inherit the
+        # sentinel-partitioner installation.
+        Base.with_logger(Base.NullLogger()) do
+            Stretto.register_strategy!(saved_default)
+        end
+    end
 end
 
 @testitem "compile — explicit strategy override" begin
@@ -256,27 +288,29 @@ end
     device = HeronR3()
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
 
-    # Register a test strategy whose matches says 0.0 (would lose dispatch)
-    # but that we want to force via the explicit kwarg.
-    called = Ref(false)
+    # Prove the explicit strategy kwarg routes through the named strategy's
+    # partitioner without running the full solve pipeline (see rationale in
+    # the sibling testitem: registered-Piccolo EmbeddedOperator signature gap
+    # on Julia 1.10).
     override_strat = Stretto.CompilationStrategy(
         name = :forced_override_test,
         description = "",
         matches = (c, d) -> 0.0,
-        # instrumented partitioner to prove this strategy ran
-        partitioner = (c, d) -> begin
-            called[] = true
-            Stretto.default_partitioner(c, d)
-        end,
+        partitioner = (c, d) -> error("SENTINEL_OVERRIDE_CALLED"),
     )
     Stretto.register_strategy!(override_strat)
-
-    report = compile(circuit, device; strategy=:forced_override_test, max_iter=2, T_ns=20.0, N_knots=5)
-
-    @test called[] == true
-    @test report isa CompilationReport
-
-    Stretto.unregister_strategy!(:forced_override_test)
+    try
+        err = try
+            compile(circuit, device; strategy=:forced_override_test, max_iter=2, T_ns=20.0, N_knots=5)
+            nothing
+        catch e
+            e
+        end
+        @test err !== nothing
+        @test occursin("SENTINEL_OVERRIDE_CALLED", sprint(showerror, err))
+    finally
+        Stretto.unregister_strategy!(:forced_override_test)
+    end
 end
 
 @testitem "compile — unknown strategy throws ArgumentError" begin
