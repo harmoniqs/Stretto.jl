@@ -149,4 +149,9 @@ export build_problem, set_build_problem!
 export CompilationStrategy
 export register_strategy!, unregister_strategy!, strategies, select_strategy
 
+function __init__()
+    register_strategy!(DEFAULT_STRATEGY)
+    return nothing
+end
+
 end # module

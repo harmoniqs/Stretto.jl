@@ -116,6 +116,24 @@ function select_strategy(circuit, device)
     return best === nothing ? default : best
 end
 
+# ---------------------------------------------------------------------------- #
+# :default strategy — substrate composition, sentinel fallback
+# ---------------------------------------------------------------------------- #
+
+"""
+The `:default` strategy composes all substrate seams and matches nothing (score
+0.0 on every input). It's excluded from `select_strategy`'s scoring pool and
+used as the fallback when no strategy scores above 0.0.
+
+Byte-for-byte equivalent to Stretto v0.2.1's `compile_block` behavior.
+"""
+const DEFAULT_STRATEGY = CompilationStrategy(
+    name = :default,
+    description = "Substrate: cold-start, whole-circuit, BilinearIntegrator. Fallback sentinel.",
+    matches = (circuit, device) -> 0.0,
+    # All other fields take their keyword-constructor defaults (substrate seams).
+)
+
 @testitem "CompilationStrategy — basic construction with all fields" begin
     using Stretto
 
@@ -271,4 +289,23 @@ end
     @test selected.name === :default
 
     Stretto.unregister_strategy!(:zero_test)
+end
+
+@testitem ":default strategy registered at module load" begin
+    using Stretto
+
+    reg = Stretto.strategies()
+    @test haskey(reg, :default)
+
+    default = reg[:default]
+    @test default.name === :default
+    @test default.description != ""  # non-trivial description
+    @test default.matches isa Function
+
+    # Substrate composition: all seam functions should be the exported substrate
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+    # matches on anything with score 0.0 (not in scoring pool, sentinel)
+    @test default.matches(circuit, device) == 0.0
+    @test default.post_process == Function[]
 end
