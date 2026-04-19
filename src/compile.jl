@@ -53,7 +53,6 @@ function compile_block(
         integrator = integ,
         Q = Q,
         free_phase = free_phase,
-        subsystem_levels = sys.subsystem_levels,
     )
     # 5. Solve via the strategy seam (substrate: single cold start;
     #    Strettissimo overrides with parallel multistart).
@@ -150,7 +149,6 @@ function _compile_block_with_strategy(
         integrator = integ,
         Q = Q,
         free_phase = free_phase,
-        subsystem_levels = sys.subsystem_levels,
     )
 
     # 6. Solve via the strategy's solver_strategy seam
