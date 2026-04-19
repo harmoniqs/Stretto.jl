@@ -1,6 +1,6 @@
 name = "Stretto"
 uuid = "6542ec78-ee1b-4af1-b08f-242328baa654"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Aaron Trowbridge <aaron@harmoniqs.co> and contributors"]
 
 [deps]
