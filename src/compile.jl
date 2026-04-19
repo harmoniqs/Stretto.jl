@@ -49,7 +49,7 @@ function compile_block(
     # `set_default_integrator!` to install Piccolissimo's SplineIntegrator for
     # multi-qubit compilation. Caller can also pass `integrator=` directly.
     integ = integrator === nothing ? default_integrator(qtraj, N_knots) : integrator
-    qcp = SplinePulseProblem(qtraj;
+    qcp = build_problem(circuit, device, qtraj;
         integrator = integ,
         Q = Q,
         free_phase = free_phase,

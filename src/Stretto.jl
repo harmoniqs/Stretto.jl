@@ -144,5 +144,6 @@ export BlockSpec, default_partitioner, set_default_partitioner!
 export default_solver_strategy, set_default_solver_strategy!
 export classify_problem, set_classify_problem!
 export PostProcessContext, default_post_process, set_default_post_process!
+export build_problem, set_build_problem!
 
 end # module
