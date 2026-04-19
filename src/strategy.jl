@@ -80,6 +80,42 @@ returned Dict does not affect the live registry.
 """
 strategies() = copy(_STRATEGY_REGISTRY)
 
+# ---------------------------------------------------------------------------- #
+# Dispatch
+# ---------------------------------------------------------------------------- #
+
+"""
+    select_strategy(circuit, device) -> CompilationStrategy
+
+Score every registered strategy except `:default` via its `matches` function.
+Return the highest-scoring strategy if its score is strictly greater than 0.0.
+Otherwise return the `:default` strategy as fallback.
+
+`:default` is excluded from the scoring pool — it's the sentinel fallback,
+not a competitor at score 0.
+
+Ties at the top score resolve by registration order (Julia's `Dict` iteration
+is insertion-ordered as of 1.9+; first registered wins).
+"""
+function select_strategy(circuit, device)
+    default = get(_STRATEGY_REGISTRY, :default, nothing)
+    default === nothing && error("no :default strategy registered — Stretto module did not load correctly")
+
+    best::Union{CompilationStrategy, Nothing} = nothing
+    best_score = 0.0
+
+    for s in values(_STRATEGY_REGISTRY)
+        s.name === :default && continue
+        score = s.matches(circuit, device)
+        if score > best_score
+            best_score = score
+            best = s
+        end
+    end
+
+    return best === nothing ? default : best
+end
+
 @testitem "CompilationStrategy — basic construction with all fields" begin
     using Stretto
 
@@ -171,4 +207,68 @@ end
     @test Stretto.strategies()[:test_overwrite].description == "second"
 
     Stretto.unregister_strategy!(:test_overwrite)
+end
+
+@testitem "select_strategy — falls back to :default when pool is empty" begin
+    using Stretto
+
+    # Register only :default (Task 7 will do this at module load; here we
+    # emulate by clearing and re-registering a minimal default).
+    for name in collect(keys(Stretto.strategies()))
+        name == :default || Stretto.unregister_strategy!(name)
+    end
+
+    # Ensure :default exists for this test (created here if Task 7 hasn't landed)
+    if !haskey(Stretto.strategies(), :default)
+        Stretto.register_strategy!(Stretto.CompilationStrategy(
+            name = :default,
+            description = "test-only default placeholder",
+            matches = (c, d) -> 0.0,
+        ))
+    end
+
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+
+    selected = Stretto.select_strategy(circuit, device)
+    @test selected.name === :default
+end
+
+@testitem "select_strategy — picks highest-scoring non-default strategy" begin
+    using Stretto
+
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+
+    low = Stretto.CompilationStrategy(
+        name = :low_score, description = "", matches = (c, d) -> 0.1,
+    )
+    high = Stretto.CompilationStrategy(
+        name = :high_score, description = "", matches = (c, d) -> 0.9,
+    )
+    Stretto.register_strategy!(low)
+    Stretto.register_strategy!(high)
+
+    selected = Stretto.select_strategy(circuit, device)
+    @test selected.name === :high_score
+
+    Stretto.unregister_strategy!(:low_score)
+    Stretto.unregister_strategy!(:high_score)
+end
+
+@testitem "select_strategy — all-zero scores fall back to :default" begin
+    using Stretto
+
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+
+    zero_strat = Stretto.CompilationStrategy(
+        name = :zero_test, description = "", matches = (c, d) -> 0.0,
+    )
+    Stretto.register_strategy!(zero_strat)
+
+    selected = Stretto.select_strategy(circuit, device)
+    @test selected.name === :default
+
+    Stretto.unregister_strategy!(:zero_test)
 end
