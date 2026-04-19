@@ -45,6 +45,41 @@ function CompilationStrategy(;
     )
 end
 
+# ---------------------------------------------------------------------------- #
+# Registry
+# ---------------------------------------------------------------------------- #
+
+const _STRATEGY_REGISTRY = Dict{Symbol, CompilationStrategy}()
+
+"""
+    register_strategy!(s::CompilationStrategy)
+
+Register `s` under `s.name`. If a strategy with that name already exists, warn
+and overwrite. Returns `s`.
+"""
+function register_strategy!(s::CompilationStrategy)
+    if haskey(_STRATEGY_REGISTRY, s.name)
+        @warn "overwriting strategy :$(s.name)"
+    end
+    _STRATEGY_REGISTRY[s.name] = s
+    return s
+end
+
+"""
+    unregister_strategy!(name::Symbol)
+
+Remove the strategy with the given name from the registry. No-op if absent.
+"""
+unregister_strategy!(name::Symbol) = (delete!(_STRATEGY_REGISTRY, name); nothing)
+
+"""
+    strategies() -> Dict{Symbol, CompilationStrategy}
+
+Return a copy of the current strategy registry. Safe to iterate; mutating the
+returned Dict does not affect the live registry.
+"""
+strategies() = copy(_STRATEGY_REGISTRY)
+
 @testitem "CompilationStrategy — basic construction with all fields" begin
     using Stretto
 
@@ -90,4 +125,50 @@ end
     @test s.partitioner isa Function
     @test s.build_problem isa Function
     @test s.solver_strategy isa Function
+end
+
+@testitem "strategy registry — register / unregister / list" begin
+    using Stretto
+
+    # Snapshot initial registry state (:default may be present if Task 7 landed)
+    initial = copy(Stretto.strategies())
+
+    s = Stretto.CompilationStrategy(
+        name = :test_register,
+        description = "registry test",
+        matches = (c, d) -> 0.0,
+    )
+
+    returned = Stretto.register_strategy!(s)
+    @test returned === s
+    @test haskey(Stretto.strategies(), :test_register)
+    @test Stretto.strategies()[:test_register] === s
+
+    Stretto.unregister_strategy!(:test_register)
+    @test !haskey(Stretto.strategies(), :test_register)
+
+    # Confirm we didn't disturb :default or anything else
+    @test keys(Stretto.strategies()) == keys(initial)
+end
+
+@testitem "strategy registry — overwrite warning" begin
+    using Stretto
+
+    s1 = Stretto.CompilationStrategy(
+        name = :test_overwrite,
+        description = "first",
+        matches = (c, d) -> 0.0,
+    )
+    s2 = Stretto.CompilationStrategy(
+        name = :test_overwrite,
+        description = "second",
+        matches = (c, d) -> 0.0,
+    )
+
+    Stretto.register_strategy!(s1)
+    # Second register should warn, not throw
+    @test_logs (:warn, r"overwriting strategy") Stretto.register_strategy!(s2)
+    @test Stretto.strategies()[:test_overwrite].description == "second"
+
+    Stretto.unregister_strategy!(:test_overwrite)
 end
