@@ -126,6 +126,7 @@ include("profiles.jl")
 include("circuits.jl")
 include("partitioning.jl")
 include("library.jl")
+include("classify.jl")
 include("compile.jl")
 include("report.jl")
 
@@ -139,5 +140,6 @@ export default_integrator, set_default_integrator!
 export default_initial_pulse, set_default_initial_pulse!
 export BlockSpec, default_partitioner, set_default_partitioner!
 export default_solver_strategy, set_default_solver_strategy!
+export classify_problem, set_classify_problem!
 
 end # module
