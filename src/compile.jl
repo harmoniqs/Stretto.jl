@@ -63,18 +63,107 @@ function compile_block(
 end
 
 """
-    compile(circuit, device; max_iter, kwargs...)
+    compile(circuit, device; strategy=nothing, max_iter, kwargs...)
 
-Compile an entire circuit on a device. v0.1: no partitioning — compiles
-the whole circuit as a single block on qubits 1:n_qubits.
+Compile an entire circuit on a device, dispatching through a `CompilationStrategy`.
+
+- When `strategy === nothing` (default), `select_strategy(circuit, device)` picks
+  the highest-scoring registered strategy (or falls back to `:default`).
+- When `strategy` is a `Symbol`, the named strategy is used directly and an
+  `ArgumentError` is thrown if it isn't registered.
+
+v0.3: single-block compilation only. Multi-block support requires a future
+release that can glue block results into a joint report.
 """
-function compile(circuit::AbstractCircuit, device::AbstractDevice; max_iter::Int=500, kwargs...)
-    blocks = default_partitioner(circuit, device)
-    @assert length(blocks) == 1 "Multi-block compilation requires a Stretto release > v0.2.1 that can glue block results into a joint report. v0.2.1 accepts only single-block partitioners."
+function compile(
+    circuit::AbstractCircuit,
+    device::AbstractDevice;
+    strategy::Union{Nothing, Symbol} = nothing,
+    max_iter::Int = 500,
+    kwargs...,
+)
+    # Resolve the strategy
+    strat = if strategy === nothing
+        select_strategy(circuit, device)
+    else
+        get(_STRATEGY_REGISTRY, strategy, nothing) !== nothing ||
+            throw(ArgumentError(
+                "unknown strategy :$strategy; available: $(collect(keys(_STRATEGY_REGISTRY)))"
+            ))
+        _STRATEGY_REGISTRY[strategy]
+    end
+
+    # Partition via the strategy's partitioner (not the global seam)
+    blocks = strat.partitioner(circuit, device)
+    length(blocks) == 1 ||
+        error("Multi-block compilation requires a Stretto release that can glue block results into a joint report. v0.3 accepts only single-block strategies.")
+
     spec = blocks[1]
-    block = compile_block(spec.subcircuit, device, spec.qubit_indices; max_iter, kwargs...)
+    block = _compile_block_with_strategy(
+        strat, spec.subcircuit, device, spec.qubit_indices;
+        max_iter, kwargs...,
+    )
     baseline = gate_level_baseline(circuit, device)
     return CompilationReport(circuit, device, block, baseline)
+end
+
+"""
+    _compile_block_with_strategy(strat, circuit, device, qubit_indices; ...)
+
+Strategy-aware version of `compile_block`. Uses the seam functions from `strat`
+(integrator, initial_pulse, build_problem, solver_strategy, post_process)
+instead of the module-level substrate seams.
+
+Not exported — an implementation detail of `compile()`. Direct callers that
+want substrate behavior can continue to use `compile_block(...)`.
+"""
+function _compile_block_with_strategy(
+    strat::CompilationStrategy,
+    circuit::AbstractCircuit,
+    device::TransmonDevice,
+    qubit_indices::AbstractVector{Int};
+    max_iter::Int = 500,
+    T_ns::Float64 = 200.0,
+    N_knots::Int = 21,
+    Q::Float64 = 100.0,
+    free_phase::Bool = true,
+    integrator = nothing,
+)
+    # 1. Build system (unchanged)
+    sys = MultiTransmonSystem(device, qubit_indices)
+    n = length(qubit_indices)
+
+    # 2. Target unitary (unchanged)
+    U_target = circuit_unitary(circuit)
+    U_goal = EmbeddedOperator(U_target, sys)
+
+    # 3. Initial pulse via the strategy's seam
+    times = collect(range(0.0, T_ns, length=N_knots))
+    pulse = strat.initial_pulse(circuit, device, times, sys.n_drives)
+
+    # 4. Integrator via the strategy's seam (unless caller passes one explicitly)
+    qtraj = UnitaryTrajectory(sys, pulse, U_goal)
+    integ = integrator === nothing ? strat.integrator(qtraj, N_knots) : integrator
+
+    # 5. Problem via the strategy's build_problem seam
+    qcp = strat.build_problem(circuit, device, qtraj;
+        integrator = integ,
+        Q = Q,
+        free_phase = free_phase,
+        subsystem_levels = sys.subsystem_levels,
+    )
+
+    # 6. Solve via the strategy's solver_strategy seam
+    result_pulse, fid = strat.solver_strategy(qcp, qtraj; max_iter=max_iter)
+    block = BlockResult(result_pulse, fid, n)
+
+    # 7. Post-process chain
+    ctx = PostProcessContext(circuit, device, qtraj, qcp)
+    for transform in strat.post_process
+        block = transform(block, ctx)
+    end
+
+    return block
 end
 
 # ============================================================================ #
@@ -143,4 +232,58 @@ end
 
     @test result_pulse isa AbstractPulse
     @test 0.0 ≤ fid ≤ 1.0
+end
+
+@testitem "compile — strategy=nothing dispatches via select_strategy (falls to :default)" begin
+    using Stretto
+
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+
+    # With only :default registered, dispatch should use :default and behave
+    # byte-for-byte the same as v0.2.1 compile. We exercise by running a tiny
+    # 1Q solve via the public compile entry point.
+    report = compile(circuit, device; max_iter=2, T_ns=20.0, N_knots=5)
+
+    # Report exists and carries sensible metadata
+    @test report isa CompilationReport
+    @test 0.0 ≤ report.pulse_fidelity ≤ 1.0
+end
+
+@testitem "compile — explicit strategy override" begin
+    using Stretto
+
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+
+    # Register a test strategy whose matches says 0.0 (would lose dispatch)
+    # but that we want to force via the explicit kwarg.
+    called = Ref(false)
+    override_strat = Stretto.CompilationStrategy(
+        name = :forced_override_test,
+        description = "",
+        matches = (c, d) -> 0.0,
+        # instrumented partitioner to prove this strategy ran
+        partitioner = (c, d) -> begin
+            called[] = true
+            Stretto.default_partitioner(c, d)
+        end,
+    )
+    Stretto.register_strategy!(override_strat)
+
+    report = compile(circuit, device; strategy=:forced_override_test, max_iter=2, T_ns=20.0, N_knots=5)
+
+    @test called[] == true
+    @test report isa CompilationReport
+
+    Stretto.unregister_strategy!(:forced_override_test)
+end
+
+@testitem "compile — unknown strategy throws ArgumentError" begin
+    using Stretto
+
+    device = HeronR3()
+    circuit = GateCircuit([GateOp(:H, (1,))], 1)
+
+    @test_throws ArgumentError compile(circuit, device; strategy=:nonexistent_xyz)
 end
