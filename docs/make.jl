@@ -8,6 +8,8 @@ generate_docs(
     "Stretto",
     [Stretto],
     pages;
+    make_literate = false,
+    make_assets = false,
     format_kwargs = (canonical = "https://docs.harmoniqs.co/Stretto.jl",),
     versions = ["dev" => "dev", "stable" => "v^", "v#.#"],
 )
