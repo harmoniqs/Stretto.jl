@@ -37,6 +37,7 @@ function HeronR3()
         :CZ => GateSpec(60.0, 0.0033),    # 60 ns, 0.33% error
         :X => GateSpec(25.0, 0.00035),    # 25 ns, 0.035% error
         :SX => GateSpec(25.0, 0.00035),    # √X, same as X
+        :H => GateSpec(35.0, 0.0005),     # synthesized via SX·RZ (virtual-Z); estimate
     )
 
     T1 = fill(68.0, 8)   # μs (mean from Willow spec)
