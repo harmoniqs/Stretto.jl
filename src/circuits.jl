@@ -32,21 +32,21 @@ end
 Base.length(c::GateCircuit) = length(c.ops)
 
 # Gate alias table: user-friendly names → GATES keys
-const GATE_ALIASES = Dict{Symbol,Symbol}(
-    :CNOT => :CX,
-)
+const GATE_ALIASES = Dict{Symbol,Symbol}(:CNOT => :CX)
 
 # Standard rotation gates not in Piccolo's GATES
 const EXTRA_GATES = Dict{Symbol,Matrix{ComplexF64}}(
-    :S  => ComplexF64[1 0; 0 im],
-    :T  => ComplexF64[1 0; 0 exp(im*π/4)],
+    :S => ComplexF64[1 0; 0 im],
+    :T => ComplexF64[1 0; 0 exp(im*π/4)],
     :Rz => ComplexF64[1 0; 0 1],  # placeholder, overridden by Rz(θ)
     # Doubly-controlled gates on qubits (1,2,3), qubit 1 MSB.
     # CCX (Toffoli): flip qubit 3 iff qubits 1,2 both |1⟩ → swaps |110⟩↔|111⟩.
     :CCX => begin
         U = Matrix{ComplexF64}(I, 8, 8)
-        U[7, 7] = 0; U[8, 8] = 0
-        U[7, 8] = 1; U[8, 7] = 1
+        U[7, 7] = 0;
+        U[8, 8] = 0
+        U[7, 8] = 1;
+        U[8, 7] = 1
         U
     end,
     # CCZ: phase-flip |111⟩.
@@ -89,13 +89,15 @@ function kron_embed(gate::AbstractMatrix, qubits::Tuple{Vararg{Int}}, n_qubits::
     # Single-qubit: direct kron
     if n_gate == 1
         q = qubits[1]
-        factors = [i == q ? Matrix{ComplexF64}(gate) : Matrix{ComplexF64}(I, d, d)
-                   for i in 1:n_qubits]
+        factors = [
+            i == q ? Matrix{ComplexF64}(gate) : Matrix{ComplexF64}(I, d, d) for
+            i = 1:n_qubits
+        ]
         return reduce(kron, factors)
     end
 
     # Adjacent multi-qubit in order: kron with identity padding
-    if qubits == Tuple(qubits[1]:qubits[1]+n_gate-1)
+    if qubits == Tuple(qubits[1]:(qubits[1]+n_gate-1))
         before = qubits[1] - 1
         after = n_qubits - qubits[end]
         factors = AbstractMatrix{ComplexF64}[]
@@ -108,20 +110,20 @@ function kron_embed(gate::AbstractMatrix, qubits::Tuple{Vararg{Int}}, n_qubits::
     # General case: build by computational basis action
     D = d^n_qubits
     U = zeros(ComplexF64, D, D)
-    for col in 0:D-1
-        bits = digits(col, base=d, pad=n_qubits) |> reverse
+    for col = 0:(D-1)
+        bits = digits(col, base = d, pad = n_qubits) |> reverse
         gate_bits = [bits[q] for q in qubits]
-        gate_idx = sum(gate_bits[k] * d^(n_gate - k) for k in 1:n_gate)
+        gate_idx = sum(gate_bits[k] * d^(n_gate - k) for k = 1:n_gate)
 
-        for out_gate_idx in 0:d^n_gate-1
+        for out_gate_idx = 0:(d^n_gate-1)
             amp = gate[out_gate_idx+1, gate_idx+1]
             iszero(amp) && continue
-            out_gate_bits = digits(out_gate_idx, base=d, pad=n_gate) |> reverse
+            out_gate_bits = digits(out_gate_idx, base = d, pad = n_gate) |> reverse
             out_bits = copy(bits)
             for (k, q) in enumerate(qubits)
                 out_bits[q] = out_gate_bits[k]
             end
-            out_col = sum(out_bits[k] * d^(n_qubits - k) for k in 1:n_qubits)
+            out_col = sum(out_bits[k] * d^(n_qubits - k) for k = 1:n_qubits)
             U[out_col+1, col+1] += amp
         end
     end
@@ -174,10 +176,7 @@ end
 @testitem "circuit_unitary — H then CZ" begin
     using LinearAlgebra
     using Piccolo: GATES
-    seq = GateCircuit(
-        [GateOp(:H, (1,)), GateOp(:CZ, (1, 2))],
-        2
-    )
+    seq = GateCircuit([GateOp(:H, (1,)), GateOp(:CZ, (1, 2))], 2)
     U = circuit_unitary(seq)
     H_embed = kron((1/√2) * [1 1; 1 -1], Matrix{ComplexF64}(I, 2, 2))
     expected = GATES[:CZ] * H_embed

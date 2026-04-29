@@ -38,8 +38,14 @@ function CompilationStrategy(;
     state = nothing,
 )
     return CompilationStrategy(
-        name, description, matches,
-        integrator, initial_pulse, partitioner, build_problem, solver_strategy,
+        name,
+        description,
+        matches,
+        integrator,
+        initial_pulse,
+        partitioner,
+        build_problem,
+        solver_strategy,
         convert(Vector{Function}, post_process),
         state,
     )
@@ -49,7 +55,7 @@ end
 # Registry
 # ---------------------------------------------------------------------------- #
 
-const _STRATEGY_REGISTRY = Dict{Symbol, CompilationStrategy}()
+const _STRATEGY_REGISTRY = Dict{Symbol,CompilationStrategy}()
 
 """
     register_strategy!(s::CompilationStrategy)
@@ -99,9 +105,10 @@ is insertion-ordered as of 1.9+; first registered wins).
 """
 function select_strategy(circuit, device)
     default = get(_STRATEGY_REGISTRY, :default, nothing)
-    default === nothing && error("no :default strategy registered — Stretto module did not load correctly")
+    default === nothing &&
+        error("no :default strategy registered — Stretto module did not load correctly")
 
-    best::Union{CompilationStrategy, Nothing} = nothing
+    best::Union{CompilationStrategy,Nothing} = nothing
     best_score = 0.0
 
     for s in values(_STRATEGY_REGISTRY)
@@ -145,7 +152,8 @@ const DEFAULT_STRATEGY = CompilationStrategy(
         initial_pulse = (c, d, t, n) -> Stretto.default_initial_pulse(c, d, t, n),
         partitioner = (c, d) -> Stretto.default_partitioner(c, d),
         build_problem = (c, d, qt; kw...) -> Stretto.build_problem(c, d, qt; kw...),
-        solver_strategy = (p, qt; kw...) -> Stretto.default_solver_strategy(p, qt; kw...),
+        solver_strategy = (p, qt; kw...) ->
+            Stretto.default_solver_strategy(p, qt; kw...),
         post_process = Function[],
         state = nothing,
     )
@@ -238,11 +246,13 @@ end
 
     # Ensure :default exists for this test (created here if Task 7 hasn't landed)
     if !haskey(Stretto.strategies(), :default)
-        Stretto.register_strategy!(Stretto.CompilationStrategy(
-            name = :default,
-            description = "test-only default placeholder",
-            matches = (c, d) -> 0.0,
-        ))
+        Stretto.register_strategy!(
+            Stretto.CompilationStrategy(
+                name = :default,
+                description = "test-only default placeholder",
+                matches = (c, d) -> 0.0,
+            ),
+        )
     end
 
     device = HeronR3()
@@ -259,10 +269,14 @@ end
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
 
     low = Stretto.CompilationStrategy(
-        name = :low_score, description = "", matches = (c, d) -> 0.1,
+        name = :low_score,
+        description = "",
+        matches = (c, d) -> 0.1,
     )
     high = Stretto.CompilationStrategy(
-        name = :high_score, description = "", matches = (c, d) -> 0.9,
+        name = :high_score,
+        description = "",
+        matches = (c, d) -> 0.9,
     )
     Stretto.register_strategy!(low)
     Stretto.register_strategy!(high)
@@ -281,7 +295,9 @@ end
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
 
     zero_strat = Stretto.CompilationStrategy(
-        name = :zero_test, description = "", matches = (c, d) -> 0.0,
+        name = :zero_test,
+        description = "",
+        matches = (c, d) -> 0.0,
     )
     Stretto.register_strategy!(zero_strat)
 

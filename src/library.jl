@@ -9,9 +9,9 @@ function qft_circuit(n::Int)
     ops = GateOp[]
 
     # QFT core
-    for k in 1:n
+    for k = 1:n
         push!(ops, GateOp(:H, (k,)))
-        for j in (k+1):n
+        for j = (k+1):n
             # Controlled-phase: CP(π/2^(j-k)) on (k, j)
             # We represent this as a named parametric gate
             θ = π / 2^(j - k)
@@ -26,7 +26,7 @@ function qft_circuit(n::Int)
 
     # Bit reversal via SWAPs
     # SWAP = CX(1,2) * CX(2,1) * CX(1,2)
-    for k in 1:div(n, 2)
+    for k = 1:div(n, 2)
         j = n - k + 1
         # SWAP(k, j) decomposed into 3 CX gates
         push!(ops, GateOp(:CX, (k, j)))

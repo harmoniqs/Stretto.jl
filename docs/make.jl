@@ -1,10 +1,7 @@
 using Stretto
 using PiccoloDocsTemplate
 
-pages = [
-    "Home" => "index.md",
-    "Library" => "lib.md",
-]
+pages = ["Home" => "index.md", "Library" => "lib.md"]
 
 generate_docs(
     @__DIR__,

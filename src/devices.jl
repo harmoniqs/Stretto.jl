@@ -44,7 +44,7 @@ struct TransmonDevice <: AbstractDevice
     name::String
     qubits::Vector{TransmonQubit}
     edges::Vector{CouplingEdge}
-    native_gates::Dict{Symbol, GateSpec}
+    native_gates::Dict{Symbol,GateSpec}
     drive_max::Float64                   # max drive amplitude (GHz)
     T1::Vector{Float64}                  # T1 per qubit (μs)
     T2::Vector{Float64}                  # T2 per qubit (μs)
@@ -88,7 +88,9 @@ function Piccolo.MultiTransmonSystem(
     levels = device.qubits[first(qubit_indices)].n_levels
 
     return MultiTransmonSystem(
-        ωs, δs, gs;
+        ωs,
+        δs,
+        gs;
         drive_bounds = device.drive_max,
         levels_per_transmon = levels,
         subsystems = collect(qubit_indices),

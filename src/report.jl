@@ -105,10 +105,20 @@ function Base.show(io::IO, r::CompilationReport)
     println(io, "Circuit: $(r.circuit_name) ($(r.n_qubits)Q)  │  Target: $(r.device_name)")
     println(io, "─" ^ 58)
     println(io, "                  Gate-Level     Pulse-Level    Improvement")
-    @printf(io, "Duration         %8.1f ns    %8.1f ns       %4.1f×\n",
-        r.gate_duration_ns, r.pulse_duration_ns, dur_ratio)
-    @printf(io, "Fidelity          %8.4f%%     %8.4f%%       %4.1f× error\n",
-        (1-r.gate_error)*100, r.pulse_fidelity*100, err_ratio)
+    @printf(
+        io,
+        "Duration         %8.1f ns    %8.1f ns       %4.1f×\n",
+        r.gate_duration_ns,
+        r.pulse_duration_ns,
+        dur_ratio
+    )
+    @printf(
+        io,
+        "Fidelity          %8.4f%%     %8.4f%%       %4.1f× error\n",
+        (1-r.gate_error)*100,
+        r.pulse_fidelity*100,
+        err_ratio
+    )
     @printf(io, "Gates                  %3d        — (1 pulse)\n", r.gate_n_gates)
     println(io, "─" ^ 58)
 end
@@ -119,10 +129,7 @@ end
 
 @testitem "gate_level_baseline — H→CZ on HeronR3" begin
     device = HeronR3()
-    circuit = GateCircuit(
-        [GateOp(:H, (1,)), GateOp(:CZ, (1, 2))],
-        2
-    )
+    circuit = GateCircuit([GateOp(:H, (1,)), GateOp(:CZ, (1, 2))], 2)
     baseline = gate_level_baseline(circuit, device)
 
     @test baseline.total_duration_ns > 0.0

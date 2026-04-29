@@ -42,14 +42,24 @@ set_build_problem!(f) = (_BUILD_PROBLEM[] = f)
 
 @testitem "build_problem — substrate constructs SplinePulseProblem" begin
     using Stretto
-    using Piccolo: UnitaryTrajectory, CubicSplinePulse, QuantumSystem,
-                   SplinePulseProblem, QuantumControlProblem
+    using Piccolo:
+        UnitaryTrajectory,
+        CubicSplinePulse,
+        QuantumSystem,
+        SplinePulseProblem,
+        QuantumControlProblem
 
-    σz = ComplexF64[1 0; 0 -1]; σx = ComplexF64[0 1; 1 0]
+    σz = ComplexF64[1 0; 0 -1];
+    σx = ComplexF64[0 1; 1 0]
     sys = QuantumSystem(σz, [σx], [1.0])
-    times = collect(range(0.0, 10.0, length=5))
-    pulse = CubicSplinePulse(zeros(1, 5), zeros(1, 5), times;
-                             initial_value=zeros(1), final_value=zeros(1))
+    times = collect(range(0.0, 10.0, length = 5))
+    pulse = CubicSplinePulse(
+        zeros(1, 5),
+        zeros(1, 5),
+        times;
+        initial_value = zeros(1),
+        final_value = zeros(1),
+    )
     qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
 
     device = HeronR3()

@@ -8,19 +8,31 @@ using TestItems
 using Piccolo
 using Piccolo:
     # Systems
-    AbstractQuantumSystem, QuantumSystem, MultiTransmonSystem, CompositeQuantumSystem,
+    AbstractQuantumSystem,
+    QuantumSystem,
+    MultiTransmonSystem,
+    CompositeQuantumSystem,
     # Operators
-    EmbeddedOperator, GATES, get_subspace_indices,
+    EmbeddedOperator,
+    GATES,
+    get_subspace_indices,
     # Pulses
-    AbstractPulse, CubicSplinePulse, duration, n_drives,
+    AbstractPulse,
+    CubicSplinePulse,
+    duration,
+    n_drives,
     # Trajectories
     UnitaryTrajectory,
     # Integrators
     BilinearIntegrator,
     # Problems
-    SplinePulseProblem, PiccoloOptions,
+    SplinePulseProblem,
+    PiccoloOptions,
     # Solving
-    solve!, fidelity, get_trajectory, extract_pulse
+    solve!,
+    fidelity,
+    get_trajectory,
+    extract_pulse
 
 """
     default_integrator(qtraj, N)
@@ -39,9 +51,7 @@ default_integrator(qtraj, N) = _DEFAULT_INTEGRATOR[](qtraj, N)
 # Mutable default builder — swapped by Strettissimo's `__init__` at load time.
 # We indirect through a Ref-held builder function so downstream packages can
 # install overrides without redefining methods on types they don't own.
-const _DEFAULT_INTEGRATOR = Ref{Any}(
-    (qtraj, N) -> BilinearIntegrator(qtraj, N)
-)
+const _DEFAULT_INTEGRATOR = Ref{Any}((qtraj, N) -> BilinearIntegrator(qtraj, N))
 
 """
     set_default_integrator!(builder)
@@ -74,7 +84,9 @@ function _substrate_default_initial_pulse(circuit, device, times, n_drives)
     u_init[:, end] .= 0.0
     du_init = zeros(n_drives, N)
     return CubicSplinePulse(
-        u_init, du_init, times;
+        u_init,
+        du_init,
+        times;
         initial_value = zeros(n_drives),
         final_value = zeros(n_drives),
     )
@@ -104,7 +116,7 @@ default_solver_strategy(problem, qtraj; max_iter) =
     _DEFAULT_SOLVER_STRATEGY[](problem, qtraj; max_iter)
 
 function _substrate_default_solver_strategy(problem, qtraj; max_iter)
-    solve!(problem; max_iter=max_iter)
+    solve!(problem; max_iter = max_iter)
     traj = get_trajectory(problem)
     pulse = extract_pulse(qtraj, traj)
     fid = fidelity(problem)
