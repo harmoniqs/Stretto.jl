@@ -26,11 +26,13 @@ println("\nQFT-4 circuit: $(length(circuit)) gates on $(circuit.n_qubits) qubits
 println("Hilbert space: 3^4 = 81 dim, 8 drives")
 println("Compiling with 500 iterations...")
 
-report = compile(circuit, device;
+report = compile(
+    circuit,
+    device;
     max_iter = 500,
-    T_ns     = 400.0,    # generous initial duration for 4Q
-    N_knots  = 31,       # more knots for 4Q
-    Q        = 200.0,
+    T_ns = 400.0,    # generous initial duration for 4Q
+    N_knots = 31,       # more knots for 4Q
+    Q = 200.0,
 )
 
 println(report)

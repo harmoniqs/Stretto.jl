@@ -8,5 +8,6 @@ const FULL_TESTS = get(ENV, "STRETTO_FULL_TESTS", "") == "1"
 if FULL_TESTS
     @run_package_tests
 else
-    @run_package_tests filter = ti -> !(:piccolissimo in ti.tags) && !(:integration in ti.tags)
+    @run_package_tests filter =
+        ti -> !(:piccolissimo in ti.tags) && !(:integration in ti.tags)
 end

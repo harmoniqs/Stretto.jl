@@ -39,7 +39,7 @@ function compile_block(
 
     # 3. Initial pulse via the seam (substrate: random Gaussian cold start;
     #    Strettissimo overrides with catalog warm-starts).
-    times = collect(range(0.0, T_ns, length=N_knots))
+    times = collect(range(0.0, T_ns, length = N_knots))
     pulse = default_initial_pulse(circuit, device, times, sys.n_drives)
 
     # 4. Trajectory → Problem → Solve
@@ -49,15 +49,17 @@ function compile_block(
     # `set_default_integrator!` to install Piccolissimo's SplineIntegrator for
     # multi-qubit compilation. Caller can also pass `integrator=` directly.
     integ = integrator === nothing ? default_integrator(qtraj, N_knots) : integrator
-    qcp = build_problem(circuit, device, qtraj;
+    qcp = build_problem(
+        circuit,
+        device,
+        qtraj;
         integrator = integ,
         Q = Q,
         free_phase = free_phase,
-        subsystem_levels = sys.subsystem_levels,
     )
     # 5. Solve via the strategy seam (substrate: single cold start;
     #    Strettissimo overrides with parallel multistart).
-    result_pulse, fid = default_solver_strategy(qcp, qtraj; max_iter=max_iter)
+    result_pulse, fid = default_solver_strategy(qcp, qtraj; max_iter = max_iter)
 
     return BlockResult(result_pulse, fid, n)
 end
@@ -78,7 +80,7 @@ release that can glue block results into a joint report.
 function compile(
     circuit::AbstractCircuit,
     device::AbstractDevice;
-    strategy::Union{Nothing, Symbol} = nothing,
+    strategy::Union{Nothing,Symbol} = nothing,
     max_iter::Int = 500,
     kwargs...,
 )
@@ -86,22 +88,28 @@ function compile(
     strat = if strategy === nothing
         select_strategy(circuit, device)
     else
-        get(_STRATEGY_REGISTRY, strategy, nothing) !== nothing ||
-            throw(ArgumentError(
-                "unknown strategy :$strategy; available: $(collect(keys(_STRATEGY_REGISTRY)))"
-            ))
+        get(_STRATEGY_REGISTRY, strategy, nothing) !== nothing || throw(
+            ArgumentError(
+                "unknown strategy :$strategy; available: $(collect(keys(_STRATEGY_REGISTRY)))",
+            ),
+        )
         _STRATEGY_REGISTRY[strategy]
     end
 
     # Partition via the strategy's partitioner (not the global seam)
     blocks = strat.partitioner(circuit, device)
-    length(blocks) == 1 ||
-        error("Multi-block compilation requires a Stretto release that can glue block results into a joint report. v0.3 accepts only single-block strategies.")
+    length(blocks) == 1 || error(
+        "Multi-block compilation requires a Stretto release that can glue block results into a joint report. v0.3 accepts only single-block strategies.",
+    )
 
     spec = blocks[1]
     block = _compile_block_with_strategy(
-        strat, spec.subcircuit, device, spec.qubit_indices;
-        max_iter, kwargs...,
+        strat,
+        spec.subcircuit,
+        device,
+        spec.qubit_indices;
+        max_iter,
+        kwargs...,
     )
     baseline = gate_level_baseline(circuit, device)
     return CompilationReport(circuit, device, block, baseline)
@@ -138,7 +146,7 @@ function _compile_block_with_strategy(
     U_goal = EmbeddedOperator(U_target, sys)
 
     # 3. Initial pulse via the strategy's seam
-    times = collect(range(0.0, T_ns, length=N_knots))
+    times = collect(range(0.0, T_ns, length = N_knots))
     pulse = strat.initial_pulse(circuit, device, times, sys.n_drives)
 
     # 4. Integrator via the strategy's seam (unless caller passes one explicitly)
@@ -146,15 +154,17 @@ function _compile_block_with_strategy(
     integ = integrator === nothing ? strat.integrator(qtraj, N_knots) : integrator
 
     # 5. Problem via the strategy's build_problem seam
-    qcp = strat.build_problem(circuit, device, qtraj;
+    qcp = strat.build_problem(
+        circuit,
+        device,
+        qtraj;
         integrator = integ,
         Q = Q,
         free_phase = free_phase,
-        subsystem_levels = sys.subsystem_levels,
     )
 
     # 6. Solve via the strategy's solver_strategy seam
-    result_pulse, fid = strat.solver_strategy(qcp, qtraj; max_iter=max_iter)
+    result_pulse, fid = strat.solver_strategy(qcp, qtraj; max_iter = max_iter)
     block = BlockResult(result_pulse, fid, n)
 
     # 7. Post-process chain
@@ -180,7 +190,7 @@ end
     σz = ComplexF64[1 0; 0 -1]
     σx = ComplexF64[0 1; 1 0]
     sys = QuantumSystem(σz, [σx], [1.0])
-    times = collect(range(0.0, 10.0, length=5))
+    times = collect(range(0.0, 10.0, length = 5))
     pulse = CubicSplinePulse(zeros(1, 5), zeros(1, 5), times)
     qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
 
@@ -192,7 +202,7 @@ end
     using Stretto
     using Piccolo: CubicSplinePulse, duration
 
-    times = collect(range(0.0, 10.0, length=5))
+    times = collect(range(0.0, 10.0, length = 5))
     n_drives = 2
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
     device = HeronR3()
@@ -211,8 +221,12 @@ end
 
 @testitem "default_solver_strategy — substrate returns fidelity + pulse tuple" begin
     using Stretto
-    using Piccolo: AbstractPulse, QuantumSystem, CubicSplinePulse, UnitaryTrajectory,
-                   SplinePulseProblem
+    using Piccolo:
+        AbstractPulse,
+        QuantumSystem,
+        CubicSplinePulse,
+        UnitaryTrajectory,
+        SplinePulseProblem
 
     # Exercise the strategy seam directly on the smallest possible problem
     # (1Q, 2-dim, 1 drive, max_iter=2) to confirm the tuple shape without
@@ -223,12 +237,12 @@ end
     σz = ComplexF64[1 0; 0 -1]
     σx = ComplexF64[0 1; 1 0]
     sys = QuantumSystem(σz, [σx], [1.0])
-    times = collect(range(0.0, 10.0, length=5))
+    times = collect(range(0.0, 10.0, length = 5))
     pulse = CubicSplinePulse(zeros(1, 5), zeros(1, 5), times)
     qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
     qcp = SplinePulseProblem(qtraj; integrator = Stretto.default_integrator(qtraj, 5))
 
-    result_pulse, fid = Stretto.default_solver_strategy(qcp, qtraj; max_iter=2)
+    result_pulse, fid = Stretto.default_solver_strategy(qcp, qtraj; max_iter = 2)
 
     @test result_pulse isa AbstractPulse
     @test 0.0 ≤ fid ≤ 1.0
@@ -266,7 +280,7 @@ end
         # With only :default registered, dispatch should resolve to :default
         # and invoke its (instrumented) partitioner, throwing our sentinel.
         err = try
-            compile(circuit, device; max_iter=2, T_ns=20.0, N_knots=5)
+            compile(circuit, device; max_iter = 2, T_ns = 20.0, N_knots = 5)
             nothing
         catch e
             e
@@ -301,7 +315,14 @@ end
     Stretto.register_strategy!(override_strat)
     try
         err = try
-            compile(circuit, device; strategy=:forced_override_test, max_iter=2, T_ns=20.0, N_knots=5)
+            compile(
+                circuit,
+                device;
+                strategy = :forced_override_test,
+                max_iter = 2,
+                T_ns = 20.0,
+                N_knots = 5,
+            )
             nothing
         catch e
             e
@@ -319,5 +340,5 @@ end
     device = HeronR3()
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
 
-    @test_throws ArgumentError compile(circuit, device; strategy=:nonexistent_xyz)
+    @test_throws ArgumentError compile(circuit, device; strategy = :nonexistent_xyz)
 end

@@ -27,13 +27,19 @@ set_default_post_process!(f) = (_DEFAULT_POST_PROCESS[] = f)
     using Stretto
     using Piccolo: UnitaryTrajectory, CubicSplinePulse, QuantumSystem, SplinePulseProblem
 
-    σz = ComplexF64[1 0; 0 -1]; σx = ComplexF64[0 1; 1 0]
+    σz = ComplexF64[1 0; 0 -1];
+    σx = ComplexF64[0 1; 1 0]
     sys = QuantumSystem(σz, [σx], [1.0])
-    times = collect(range(0.0, 10.0, length=5))
-    pulse = CubicSplinePulse(zeros(1, 5), zeros(1, 5), times;
-                             initial_value=zeros(1), final_value=zeros(1))
+    times = collect(range(0.0, 10.0, length = 5))
+    pulse = CubicSplinePulse(
+        zeros(1, 5),
+        zeros(1, 5),
+        times;
+        initial_value = zeros(1),
+        final_value = zeros(1),
+    )
     qtraj = UnitaryTrajectory(sys, pulse, ComplexF64[1 0; 0 1])
-    problem = SplinePulseProblem(qtraj; Q=100.0)
+    problem = SplinePulseProblem(qtraj; Q = 100.0)
 
     device = HeronR3()
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
