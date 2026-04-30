@@ -19,6 +19,7 @@ using Piccolo:
     # Pulses
     AbstractPulse,
     CubicSplinePulse,
+    ZeroOrderPulse,
     duration,
     n_drives,
     # Trajectories
@@ -26,6 +27,7 @@ using Piccolo:
     # Integrators
     BilinearIntegrator,
     # Problems
+    SmoothPulseProblem,
     SplinePulseProblem,
     PiccoloOptions,
     # Solving
@@ -66,9 +68,10 @@ set_default_integrator!(builder) = (_DEFAULT_INTEGRATOR[] = builder; builder)
 """
     default_initial_pulse(circuit, device, times, n_drives)
 
-Return the initial `CubicSplinePulse` that seeds optimization. Substrate: a random
-Gaussian cold start (std = 0.02), zero-clamped at the first and last knots with
-zero derivatives.
+Return the initial `AbstractPulse` that seeds optimization. Substrate: a random
+Gaussian cold start (std = 0.02) on a `ZeroOrderPulse`, zero-clamped at the
+first and last knots — pairs with the substrate `SmoothPulseProblem` template,
+which adds derivative-of-control regularization for cold-start reliability.
 
 Strettissimo overrides this with a catalog-retrieval warm-start keyed on the
 (circuit fingerprint, device profile) pair, falling back to the substrate on
@@ -82,10 +85,8 @@ function _substrate_default_initial_pulse(circuit, device, times, n_drives)
     u_init = 0.02 * randn(n_drives, N)
     u_init[:, 1] .= 0.0
     u_init[:, end] .= 0.0
-    du_init = zeros(n_drives, N)
-    return CubicSplinePulse(
+    return ZeroOrderPulse(
         u_init,
-        du_init,
         times;
         initial_value = zeros(n_drives),
         final_value = zeros(n_drives),
@@ -98,7 +99,10 @@ const _DEFAULT_INITIAL_PULSE = Ref{Any}(_substrate_default_initial_pulse)
     set_default_initial_pulse!(f)
 
 Install `f` as the initial-pulse builder. `f` must have signature
-`(circuit, device, times, n_drives) -> CubicSplinePulse`.
+`(circuit, device, times, n_drives) -> AbstractPulse`. Whatever pulse
+type is returned must be compatible with the problem template installed
+via `set_build_problem!` (substrate: `ZeroOrderPulse` paired with
+`SmoothPulseProblem`).
 """
 set_default_initial_pulse!(f) = (_DEFAULT_INITIAL_PULSE[] = f)
 
