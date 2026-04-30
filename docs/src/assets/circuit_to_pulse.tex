@@ -1,0 +1,29 @@
+\documentclass[border=4pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{quantikz, calc, arrows.meta}
+\usepackage{quantikz}
+
+\begin{document}
+\begin{tikzpicture}
+
+% LEFT: the circuit
+\node[anchor=center] (left) at (0, 0) {%
+\begin{quantikz}[row sep={0.7cm,between origins}, column sep=0.30cm]
+\lstick{$q_1$} & \gate{H} & \ctrl{1} & \gate{H} & \gate{T} & \ctrl{1} & \qw \\
+\lstick{$q_2$} & \qw      & \targ{}  & \qw      & \gate{Z} & \ctrl{-1}& \qw
+\end{quantikz}
+};
+
+% ARROW
+\node[anchor=center, font=\Large\sffamily\bfseries] (arrow) at (4.3, 0) {$\Longrightarrow$};
+
+% RIGHT: a single 2-qubit block U
+\node[anchor=center] (right) at (6.3, 0) {%
+\begin{quantikz}[row sep={0.7cm,between origins}, column sep=0.30cm]
+\lstick{$q_1$} & \gate[2]{U} & \qw \\
+\lstick{$q_2$} &             & \qw
+\end{quantikz}
+};
+
+\end{tikzpicture}
+\end{document}

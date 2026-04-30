@@ -1,6 +1,5 @@
 # Stretto.jl
 
-<!--```@raw html-->
 <div align="center">
   <table>
     <tr>
@@ -34,25 +33,95 @@
     </tr>
   </table>
 </div>
-<!--```-->
 
-**Stretto.jl** is the circuit-to-pulse compilation layer of the [Piccolo.jl](https://github.com/harmoniqs/Piccolo.jl) ecosystem. Given a gate-level circuit and a hardware device profile, Stretto synthesizes a single optimized control pulse that implements the whole circuit — skipping the intermediate gate decomposition and scheduling steps of a conventional compiler.
+> **A circuit isn't a sequence of gates. It's a unitary. Compile it as one.**
 
-## What problem does it solve?
+<p align="center">
+  <img src="docs/src/assets/circuit_to_pulse.png" alt="Stretto compiles a circuit into a single block unitary" width="700"/>
+</p>
 
-A conventional quantum compiler takes a high-level circuit, decomposes it into native gates, schedules them, and lowers each gate to a precomputed pulse. That pipeline leaves pulse-level fidelity on the table: every gate boundary is a re-initialization, every idle qubit is accumulating noise, every decomposition hides joint optimization opportunities.
+**Stretto.jl** is the circuit-to-pulse compilation layer of the [Piccolo.jl](https://github.com/harmoniqs/Piccolo.jl) ecosystem. Given a gate-level circuit and a hardware device profile, Stretto synthesizes a single optimized control pulse that implements the whole circuit as one block unitary $U$ — skipping gate decomposition, scheduling, and gate-boundary error accumulation.
 
-Stretto treats the circuit as the target and asks Piccolo to solve for *one pulse* on the device that realizes the whole unitary. Concretely, for a circuit $U_\text{circ}$ and a device system $H_\text{sys}$:
+## Why this is different
+
+A conventional quantum compiler decomposes a circuit into native gates, schedules them, and lowers each gate to a precomputed pulse. That pipeline leaves pulse-level fidelity on the table — every gate boundary is a re-initialization, every idle qubit is accumulating decoherence, every decomposition hides joint optimization opportunities.
+
+Stretto treats the circuit as a unitary $U_\text{circ}$ and solves directly for a control pulse $u(t)$ on the device system $H_\text{sys}(u)$:
 
 ```math
 \begin{aligned}
-\min_{u(t),\, \varphi} \quad & 1 - \mathcal{F}\!\left(U_\text{circ},\, V_\varphi \, U(T;\, u)\right) \\
+\min_{u(t),\,\varphi}\quad & 1 - \mathcal{F}\!\left(U_\text{circ},\, V_\varphi\, U(T;\,u)\right) \\
 \text{subject to}\quad & \dot{U}(t) = -i\,H_\text{sys}(u(t))\,U(t),\quad U(0) = I, \\
- & u_\text{min} \le u(t) \le u_\text{max},
+ & u_\text{min} \le u(t) \le u_\text{max}.
 \end{aligned}
 ```
 
-where $V_\varphi$ are per-qubit virtual-Z phases (free-phase), $U(T;\,u)$ is the propagator at the pulse endpoint, and $\mathcal{F}$ is the Pedersen subspace fidelity on the device's computational levels.
+$V_\varphi$ are per-qubit virtual-Z phases (free-phase). $\mathcal{F}$ is the Pedersen subspace fidelity on the computational levels.
+
+| | Conventional | Stretto |
+|---|---|---|
+| Optimization unit | one gate | one block (or whole circuit) |
+| Gate-boundary error | $N$ × per-gate error | one solve, no boundaries |
+| Idle decoherence | every non-active qubit at every layer | actively driven through the block |
+| Hardware coupling | hidden in decomposition | first-class — pulse uses the device's actual drift |
+| Duration | $\sum$ gate durations + scheduling slack | min-time compressed against fidelity floor |
+
+## Quick example
+
+```julia
+using Stretto
+
+device = HeronR3()                     # IBM Heron r3 (transmon, heavy-hex, CZ-native)
+circuit = toffoli_circuit()            # 3Q Toffoli — would normally decompose into ~6 CNOTs
+report = compile(circuit, device; max_iter = 100)
+println(report)
+```
+
+```
+Stretto Compilation Report
+Circuit: 3Q circuit (1 gates) (3Q)  │  Target: ibm_heron_r3
+──────────────────────────────────────────────────────────
+                Gate-Level     Pulse-Level    Improvement
+Duration          410.0 ns       <pulse> ns      <×>
+Fidelity          <gate>%        <pulse>%        <×> error
+```
+
+## Compiling QEC blocks
+
+The flagship use case: compile each block of a multi-block QEC circuit (e.g. surface-code syndrome extraction) once into a reusable pulse. Subsequent rounds reuse the cached pulse instead of re-decomposing.
+
+```julia
+report = compile(syndrome_circuit, device; strategy = :warm_stitch_transmon)
+```
+
+`:warm_stitch_transmon` (in [Strettissimo](#whats-where), Harmoniqs' private competitive layer) does the full pipeline:
+
+1. **Transpile** to native gates: `to_native(circuit, device)` — pure circuit rewriting, e.g. `CNOT(c,t) → H(t)·CZ(c,t)·H(t)`.
+2. **Schedule** the native gates serially (or with parallelization in v0.4+).
+3. **Stitch** catalog pulses into a single warm-start pulse for the whole block.
+4. **Joint-solve** the block as one optimization — eliminates gate-boundary errors, exploits the device drift.
+5. **Min-time compress** against a fidelity floor.
+
+## What's where
+
+Stretto is a substrate that runs *productively on small problems* with no proprietary dependencies. Harmoniqs' competitive compilation intelligence lives in a private overlay package, **Strettissimo.jl**, which plugs in via Stretto's strategy-registry seam:
+
+| Feature | Stretto (public, MIT) | Strettissimo (private) |
+|---|---|---|
+| Circuit IR (`GateCircuit`, `GateOp`, `circuit_unitary`) | ✅ | — |
+| Gate library (`qft`, `toffoli`, `ccz`, ...) | ✅ | — |
+| Device profiles (`HeronR3`, `Willow`, `Ankaa3`, ...) | ✅ | — |
+| `to_native` transpile pass | ✅ | — |
+| `compile_block` substrate pipeline | ✅ | — |
+| `BilinearIntegrator` (cold-start, 1-2Q) | ✅ substrate | — |
+| `SplineIntegrator` (multi-qubit scaling) | — | ✅ |
+| Pulse catalog warm-starts | — | ✅ |
+| Graph-based partitioning | — | ✅ |
+| Parallel multistart solver | — | ✅ |
+| QEC kernel compilation | thin entry point | ✅ implementation |
+| Stagnation / landscape diagnostics | — | ✅ |
+
+Stretto users get a working substrate. Harmoniqs collaborators and NDA partners get the competitive layer.
 
 ## Installation
 
@@ -61,98 +130,39 @@ using Pkg
 Pkg.add("Stretto")
 ```
 
-For problems larger than ~2 qubits, the default `BilinearIntegrator` can exhaust
-memory during evaluator construction. Harmoniqs collaborators with access to the
-private `Piccolissimo.jl` can swap in a scalable spline-based integrator by
-setting `Stretto.default_integrator` directly (see "Key Features" below).
+For multi-qubit problems Stretto's default `BilinearIntegrator` can exhaust memory during evaluator construction. Harmoniqs collaborators with access to `Piccolissimo.jl` can swap in a scalable spline-based integrator by loading Strettissimo, which auto-installs the override on `__init__`.
 
-## Quick Example
+## Status
 
-```julia
-using Stretto
-
-# A 4-qubit IBM Heron r3 device profile
-device = HeronR3()
-
-# A circuit — Toffoli on qubits 1..3
-circuit = toffoli_circuit()
-
-# Compile to a pulse
-report = compile(circuit, device; max_iter=100)
-
-println(report)
-# =>
-# Stretto Compilation Report
-# Circuit: 3Q circuit (1 gates) (3Q)  │  Target: ibm_heron_r3
-# ──────────────────────────────────────────────────────────
-#                   Gate-Level     Pulse-Level    Improvement
-# Duration            410.0 ns        ... ns         ...×
-# Fidelity           ...%            ...%           ...× error
-```
-
-## Key Features (v0.2)
-
-- **Device profiles.** `HeronR3` (IBM Heron r3 model) plus the infrastructure to add others (`TransmonDevice` is a thin wrapper around Piccolo's `MultiTransmonSystem`).
-- **Circuit IR.** `GateCircuit`, `GateOp`, `circuit_unitary` — plus built-in `qft_circuit(n)`, `toffoli_circuit()`, `ccz_circuit()`.
-- **Single-pulse compilation.** `compile_block` wires a circuit + device subset → Piccolo `UnitaryTrajectory` → `SplinePulseProblem` → optimized pulse. `compile` does the whole circuit.
-- **Gate-vs-pulse benchmarks.** `CompilationReport` compares the published gate-level baseline to the pulse-level result.
-- **Extensible integrator.** Default: Piccolo's `BilinearIntegrator` (adequate for 1-2 qubit problems). The call site is a single `Stretto.default_integrator(qtraj, N)` seam that callers can override — e.g., to swap in a spline-based integrator for multi-qubit compilation, or pass `integrator=` to `compile_block` directly.
-
-## Not yet in v0.2 (future work)
-
-| Feature | Target |
+| Version | What ships |
 |---|---|
-| QASM import | v0.3 |
-| Catalog warm-starts | v0.3 |
-| Circuit partitioning | v0.3 |
-| QEC kernel integration | v0.4 |
-| Framework adapters (Qiskit/Cirq via PythonCall) | v0.4 |
+| v0.2 | Circuit IR, device profiles, `compile_block`, four substrate seams |
+| v0.3 | `CompilationStrategy` registry, `select_strategy`, `:default` strategy |
+| **v0.4** | **`to_native(circuit, device)` transpile pass** |
+| v0.5 (planned) | QASM import |
+| v0.6+ | Framework adapters (Qiskit / Cirq via PythonCall) |
 
 ## Contributing
 
-### Running tests
-
-Default suite (fast, public-deps only):
-
 ```bash
+# Run substrate tests (no private deps)
 julia --project=. test/runtests.jl
-```
 
-Full suite (includes 2Q and 3Q `compile_block` smoke tests; requires a scalable integrator — Harmoniqs collaborators only):
-
-```bash
+# Run with Piccolissimo for multi-qubit smoke tests
 julia --project=. -e 'using Pkg; Pkg.develop(path="../Piccolissimo.jl")'
 STRETTO_FULL_TESTS=1 julia --project=. test/runtests.jl
-```
 
-### Building Documentation
-
-This package uses a Documenter config shared across the Harmoniqs monorepo. First-time setup:
-
-```bash
+# Build docs
 ./docs/get_docs_utils.sh
-```
-
-Build:
-
-```bash
 julia --project=docs docs/make.jl
 ```
 
-Live editing:
+## See also
 
-```bash
-julia --project=docs -e '
-  using LiveServer, Stretto, Revise
-  servedocs(
-    literate_dir="docs/literate",
-    skip_dirs=["docs/src/generated", "docs/src/assets/"],
-    skip_files=["docs/src/index.md"]
-  )'
-```
+- [Piccolo.jl](https://github.com/harmoniqs/Piccolo.jl) — the quantum optimal control engine Stretto sits on top of.
+- [spec-20260418-stretto-strettissimo-split](amico/vault/specs/spec-20260418-stretto-strettissimo-split.md) — design doc for the public/private split and seam contract.
+- [spec-20260413-qec-pulse-kernels](amico/vault/specs/spec-20260413-qec-pulse-kernels.md) — the flagship QEC-kernel compilation application.
 
-> **Note:** `servedocs` will loop if it watches generated files. Keep generated files in the skip dirs/files args.
+---
 
------
-
-*"Some people stretto; some people wait."*
+*"Some people stretto. Some people wait."*
