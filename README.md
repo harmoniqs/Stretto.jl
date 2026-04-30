@@ -68,23 +68,32 @@ $V_\varphi$ are per-qubit virtual-Z phases (free-phase). $\mathcal{F}$ is the Pe
 
 ## Quick example
 
+Cold-start a single-qubit `X` gate on a 2-level model of an IBM Heron r3 transmon:
+
 ```julia
-using Stretto
+using Random, Stretto
+Random.seed!(0xc0ffee)
 
-device = HeronR3()                     # IBM Heron r3 (transmon, heavy-hex, CZ-native)
-circuit = toffoli_circuit()            # 3Q Toffoli — would normally decompose into ~6 CNOTs
-report = compile(circuit, device; max_iter = 100)
-println(report)
+device = HeronR3(n_levels = 2)         # qubit subspace; drop the kwarg for 3-level (with leakage)
+circuit = GateCircuit([GateOp(:X, (1,))], 1)
+
+report = compile(
+    circuit, device;
+    max_iter = 1500, T_ns = 60.0, N_knots = 21,
+    Q = 100.0, R = 1e-4, ddu_bound = 10.0,
+    free_phase = true,
+)
 ```
 
 ```
-Stretto Compilation Report
-Circuit: 3Q circuit (1 gates) (3Q)  │  Target: ibm_heron_r3
-──────────────────────────────────────────────────────────
-                Gate-Level     Pulse-Level    Improvement
-Duration          410.0 ns       <pulse> ns      <×>
-Fidelity          <gate>%        <pulse>%        <×> error
+Pulse fidelity  : 0.99283
+Pulse duration  : 60.0 ns
+Wall clock      : ~120 s on a workstation
 ```
+
+The full runnable script is at [`scripts/x_heronr3_2level.jl`](scripts/x_heronr3_2level.jl).
+
+> **For multi-qubit circuits or high-fidelity (≥ 5-nines) results,** the substrate cold-start path isn't enough — install [Strettissimo](#whats-where) to enable parallel multistart, catalog warm-starts, and min-time compression. Public Stretto lands you in the right basin; Strettissimo lands you at the bottom.
 
 ## Compiling QEC blocks
 

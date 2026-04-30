@@ -14,8 +14,8 @@ Compile a circuit block to a single optimized pulse on a device qubit subset.
 
 1. Build QuantumSystem from device
 2. Compute target unitary → EmbeddedOperator (multi-level)
-3. Cold-start CubicSplinePulse
-4. UnitaryTrajectory → SplinePulseProblem → solve!
+3. Cold-start pulse via `default_initial_pulse` (substrate: `ZeroOrderPulse`)
+4. UnitaryTrajectory → `build_problem` (substrate: `SmoothPulseProblem`) → solve!
 5. Extract optimized pulse
 """
 function compile_block(
@@ -53,6 +53,7 @@ function compile_block(
         circuit,
         device,
         qtraj;
+        N_knots = N_knots,
         integrator = integ,
         Q = Q,
         free_phase = free_phase,
@@ -136,6 +137,7 @@ function _compile_block_with_strategy(
     Q::Float64 = 100.0,
     free_phase::Bool = true,
     integrator = nothing,
+    build_problem_kwargs...,
 )
     # 1. Build system (unchanged)
     sys = MultiTransmonSystem(device, qubit_indices)
@@ -153,14 +155,18 @@ function _compile_block_with_strategy(
     qtraj = UnitaryTrajectory(sys, pulse, U_goal)
     integ = integrator === nothing ? strat.integrator(qtraj, N_knots) : integrator
 
-    # 5. Problem via the strategy's build_problem seam
+    # 5. Problem via the strategy's build_problem seam.
+    # Extra kwargs (R, ddu_bound, etc.) flow through from compile() to the
+    # underlying problem template (substrate: SmoothPulseProblem).
     qcp = strat.build_problem(
         circuit,
         device,
         qtraj;
+        N_knots = N_knots,
         integrator = integ,
         Q = Q,
         free_phase = free_phase,
+        build_problem_kwargs...,
     )
 
     # 6. Solve via the strategy's solver_strategy seam
@@ -198,9 +204,9 @@ end
     @test integ isa BilinearIntegrator
 end
 
-@testitem "default_initial_pulse — substrate returns zero-boundary CubicSplinePulse" begin
+@testitem "default_initial_pulse — substrate returns zero-boundary ZeroOrderPulse" begin
     using Stretto
-    using Piccolo: CubicSplinePulse, duration
+    using Piccolo: ZeroOrderPulse, duration
 
     times = collect(range(0.0, 10.0, length = 5))
     n_drives = 2
@@ -209,12 +215,12 @@ end
 
     pulse = Stretto.default_initial_pulse(circuit, device, times, n_drives)
 
-    @test pulse isa CubicSplinePulse
+    @test pulse isa ZeroOrderPulse
     @test duration(pulse) ≈ 10.0
     @test pulse.n_drives == n_drives
     # Substrate contract: zero-clamped at both boundaries via explicit
-    # initial_value / final_value (these are load-bearing for
-    # SplinePulseProblem, not decorative).
+    # initial_value / final_value (load-bearing for SmoothPulseProblem,
+    # which uses these to set up final-value constraints).
     @test pulse.initial_value == zeros(n_drives)
     @test pulse.final_value == zeros(n_drives)
 end

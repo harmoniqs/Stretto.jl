@@ -38,6 +38,15 @@ function qft_circuit(n::Int)
 end
 
 """
+    bell_circuit()
+
+2-qubit Bell-state preparation circuit: `H(1) · CNOT(1, 2)`. Maps |00⟩ to
+the Bell state (|00⟩ + |11⟩)/√2. The canonical "first quantum circuit" —
+small enough for fast public 1-2 qubit demos.
+"""
+bell_circuit() = GateCircuit([GateOp(:H, (1,)), GateOp(:CNOT, (1, 2))], 2)
+
+"""
     toffoli_circuit()
 
 3-qubit Toffoli (CCX) gate: flip qubit 3 iff qubits 1 and 2 are both |1⟩.
@@ -67,6 +76,20 @@ ccz_circuit() = GateCircuit([GateOp(:CCZ, (1, 2, 3))], 3)
     # Unitarity check (smallest problem we test)
     U = circuit_unitary(c)
     @test U' * U ≈ I(4) atol=1e-10
+end
+
+@testitem "bell_circuit — 2-qubit Bell prep" begin
+    using LinearAlgebra
+    c = bell_circuit()
+    @test c isa GateCircuit
+    @test c.n_qubits == 2
+    @test length(c.ops) == 2
+
+    # Bell state preparation: |00⟩ → (|00⟩ + |11⟩)/√2
+    U = circuit_unitary(c)
+    @test U' * U ≈ I(4) atol=1e-12
+    bell = U * ComplexF64[1, 0, 0, 0]
+    @test bell ≈ ComplexF64[1, 0, 0, 1] / √2 atol=1e-12
 end
 
 @testitem "toffoli_circuit — 3-qubit unitary" begin
