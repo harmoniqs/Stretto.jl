@@ -8,7 +8,7 @@
 
 % LEFT: the circuit
 \node[anchor=center] (left) at (0, 0) {%
-\begin{quantikz}[row sep={0.7cm,between origins}, column sep=0.30cm]
+\begin{quantikz}[row sep={1.0cm,between origins}, column sep=0.30cm]
 \lstick{$q_1$} & \gate{H} & \ctrl{1} & \gate{H} & \gate{T} & \ctrl{1} & \qw \\
 \lstick{$q_2$} & \qw      & \targ{}  & \qw      & \gate{Z} & \ctrl{-1}& \qw
 \end{quantikz}
@@ -17,11 +17,14 @@
 % ARROW
 \node[anchor=center, font=\Large\sffamily\bfseries] (arrow) at (4.3, 0) {$\Longrightarrow$};
 
-% RIGHT: a single 2-qubit block U
-\node[anchor=center] (right) at (6.3, 0) {%
-\begin{quantikz}[row sep={0.7cm,between origins}, column sep=0.30cm]
-\lstick{$q_1$} & \gate[2]{U} & \qw \\
-\lstick{$q_2$} &             & \qw
+% RIGHT: a single 2-qubit block U_\text{circ} via quantikz, with explicit
+% minimum width/height on the gate so the rendered box is actually square.
+\node[anchor=center] (right) at (5.95, 0) {%
+\begin{quantikz}[row sep={1.4cm,between origins}, column sep=0.30cm]
+\lstick{$q_1$} & \gate[2, disable auto height,
+                     style={minimum width=1.4cm, minimum height=1.4cm}
+                  ]{U_\text{circ}} & \qw \\
+\lstick{$q_2$} &                          & \qw
 \end{quantikz}
 };
 
