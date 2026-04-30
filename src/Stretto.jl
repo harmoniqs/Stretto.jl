@@ -150,7 +150,7 @@ export AbstractDevice, TransmonDevice, TransmonQubit, CouplingEdge
 export HeronR3
 export AbstractCircuit, GateOp, GateCircuit, circuit_unitary
 export to_native, native_gate_set
-export qft_circuit, toffoli_circuit, ccz_circuit
+export qft_circuit, bell_circuit, toffoli_circuit, ccz_circuit
 export compile, compile_block
 export CompilationReport, gate_level_baseline
 export default_integrator, set_default_integrator!
