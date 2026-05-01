@@ -35,6 +35,6 @@ jobs:
         if: env.HARMONIQS_CI_TOKEN != ''
         run: |
           git config --global url."https://x-access-token:${HARMONIQS_CI_TOKEN}@github.com/".insteadOf "https://github.com/"
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
