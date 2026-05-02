@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: Configure access to private Harmoniqs deps
         env:
           HARMONIQS_CI_TOKEN: ${{ secrets.HARMONIQS_CI_TOKEN }}
