@@ -37,8 +37,11 @@ const GATE_ALIASES = Dict{Symbol,Symbol}(:CNOT => :CX)
 # Standard rotation gates not in Piccolo's GATES
 const EXTRA_GATES = Dict{Symbol,Matrix{ComplexF64}}(
     :S => ComplexF64[1 0; 0 im],
+    :SDG => ComplexF64[1 0; 0 -im],   # S^dagger
     :SX => 0.5 .* ComplexF64[1+im 1-im; 1-im 1+im],   # √X (HeronR3 native)
     :T => ComplexF64[1 0; 0 exp(im*π/4)],
+    :TDG => ComplexF64[1 0; 0 exp(-im*π/4)],   # T^dagger
+    :SWAP => ComplexF64[1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 1],
     :Rz => ComplexF64[1 0; 0 1],  # placeholder, overridden by Rz(θ)
     # Doubly-controlled gates on qubits (1,2,3), qubit 1 MSB.
     # CCX (Toffoli): flip qubit 3 iff qubits 1,2 both |1⟩ → swaps |110⟩↔|111⟩.

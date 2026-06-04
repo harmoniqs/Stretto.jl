@@ -149,6 +149,7 @@ include("post_process.jl")
 include("strategy.jl")
 include("compile.jl")
 include("report.jl")
+include("qasm.jl")
 
 export AbstractDevice, TransmonDevice, TransmonQubit, CouplingEdge
 export HeronR3
@@ -166,6 +167,7 @@ export PostProcessContext, default_post_process, set_default_post_process!
 export build_problem, set_build_problem!
 export CompilationStrategy
 export register_strategy!, unregister_strategy!, strategies, select_strategy
+export from_qasm
 
 function __init__()
     register_strategy!(DEFAULT_STRATEGY)
