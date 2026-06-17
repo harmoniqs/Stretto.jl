@@ -28,10 +28,39 @@ using Stretto
     @test isapprox(peak_freq, 5.0, atol=0.1)
 end
 
+
+@testitem "OpenQASM 3 Import Parser" begin
+    using Stretto
+    using Stretto: GateOp
+    
+    qasm_str = """
+    OPENQASM 3;
+    include "stdgates.inc";
+    qubit[2] q;
+    h q[0];
+    cx q[0], q[1];
+    """
+    
+    # Process the OpenQASM 3 payload
+    circuit = from_qasm(qasm_str)
+    
+    # Verify core AST extraction and offset mapping
+    @test circuit.num_qubits == 2
+    @test length(circuit.ops) == 2
+    @test circuit.ops[1] == GateOp(:H, (1,))
+    @test circuit.ops[2] == GateOp(:CX, (1, 2))
+    
+    # Verify mathematical unitary correctness against a manual equivalent
+    manual_circuit = GateCircuit([GateOp(:H, (1,)), GateOp(:CX, (1, 2))], 2)
+    @test circuit_unitary(circuit) ≈ circuit_unitary(manual_circuit)
+end
+
 # External-cloner / Piccolo-only CI filter: skip tests that need Piccolissimo or
 # that are slow (:integration). Full internal CI and `Pkg.test` with
 # Piccolissimo loaded should override this by passing a broader filter.
 const FULL_TESTS = get(ENV, "STRETTO_FULL_TESTS", "") == "1"
+
+
 
 if FULL_TESTS
     @run_package_tests
