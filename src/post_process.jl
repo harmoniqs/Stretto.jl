@@ -110,10 +110,7 @@ end
     f₁, f₂ = 0.05, 0.20  # GHz
     T = 200.0  # ns
     knot_times = collect(range(0.0, T, length = 2001))
-    controls = vcat(
-        sin.(2π * f₁ .* knot_times)',
-        sin.(2π * f₂ .* knot_times)',
-    )
+    controls = vcat(sin.(2π * f₁ .* knot_times)', sin.(2π * f₂ .* knot_times)')
     pulse = ZeroOrderPulse(controls, knot_times)
 
     n_samples = 1000
