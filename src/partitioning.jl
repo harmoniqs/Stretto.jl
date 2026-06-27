@@ -23,7 +23,7 @@ device connectivity, sub-circuit cost estimates, and crosstalk profiles.
 default_partitioner(circuit, device) = _DEFAULT_PARTITIONER[](circuit, device)
 
 _substrate_default_partitioner(circuit, device) =
-    [BlockSpec(circuit, collect(1:circuit.n_qubits))]
+    [BlockSpec(circuit, collect(1:(circuit.n_qubits)))]
 
 const _DEFAULT_PARTITIONER = Ref{Any}(_substrate_default_partitioner)
 
