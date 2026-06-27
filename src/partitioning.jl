@@ -36,7 +36,7 @@ Install `f` as the partitioner. `f` must have signature
 set_default_partitioner!(f) = (_DEFAULT_PARTITIONER[] = f)
 
 @testitem "BlockSpec — basic construction" begin
-    using Stretto
+    using Legato
 
     circuit = GateCircuit([GateOp(:H, (1,))], 1)
     block = BlockSpec(circuit, [1])
@@ -45,12 +45,12 @@ set_default_partitioner!(f) = (_DEFAULT_PARTITIONER[] = f)
 end
 
 @testitem "default_partitioner — substrate returns one whole-circuit block" begin
-    using Stretto
+    using Legato
 
     circuit = qft_circuit(3)
     device = HeronR3()
 
-    blocks = Stretto.default_partitioner(circuit, device)
+    blocks = Legato.default_partitioner(circuit, device)
 
     @test length(blocks) == 1
     @test blocks[1].qubit_indices == [1, 2, 3]
